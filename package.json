@@ -1,0 +1,18 @@
+{
+  "name": "mini-press",
+  "version": "1.0.0",
+  "description": "A zero-dependency blogging platform built on Bun built-ins only.",
+  "type": "module",
+  "engines": {
+    "bun": ">=1.4.0"
+  },
+  "scripts": {
+    "start": "bun src/server.js",
+    "dev": "bun --watch src/server.js",
+    "test": "bun test",
+    "create-admin": "bun src/scripts/create-admin.js"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "license": "MIT"
+}
