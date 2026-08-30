@@ -15,7 +15,7 @@
 //     (timingSafeEqual throughout).
 //   - Does NOT protect against: XSS stealing a valid cookie (mitigate with
 //     httpOnly, which we set), an attacker with server-side access to the
-//     session secret file, or brute-forcing a weak admin password (no rate
+//     session secret file, or brute-forcing a weak account password (no rate
 //     limiting in this MVP — documented gap, see README).
 
 import { scryptSync, randomBytes, createHmac, timingSafeEqual } from "node:crypto";

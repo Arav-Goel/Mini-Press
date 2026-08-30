@@ -1,6 +1,6 @@
-/* Loaded alongside site.css on /admin* pages for editor + dashboard layout. */
-.admin-bar { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
-.admin-bar .button { background: var(--accent); color: white; padding: 0.5rem 1rem; border-radius: 4px; text-decoration: none; }
+/* Loaded alongside site.css on account pages for the editor and post list. */
+.account-bar { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+.account-bar .button { background: var(--accent); color: white; padding: 0.5rem 1rem; border-radius: 4px; text-decoration: none; }
 .post-table { width: 100%; border-collapse: collapse; }
 .post-table th, .post-table td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--line); }
 

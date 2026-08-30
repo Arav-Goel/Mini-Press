@@ -1,6 +1,6 @@
 # mini-press
 
-A tiny WordPress. Login, write posts in Markdown, upload a cover photo that
+A tiny social publishing platform. Create an account, write posts in Markdown, upload a cover photo that
 gets auto-resized, publish, readers comment, everyone gets an RSS feed, and
 the editor shows a live preview as you type — all on **one runtime, zero
 installed packages**.
@@ -16,38 +16,35 @@ You need **Bun >= 1.4.0**. Install it once from https://bun.sh (that's the
 Node or Python itself).
 
 ```bash
-# 1. create your admin login (one time)
-bun src/scripts/create-admin.js yourname yourpassword
-
-# 2. start the server
+# 1. start the server
 make run
-# or: bun src/server.js
+# then create an account at http://localhost:3000/signup
 
-# 3. open it
+# 2. open it
 # public site:  http://localhost:3000
-# admin login:  http://localhost:3000/admin/login
+# account signup: http://localhost:3000/signup
 ```
 
 Run the tests: `make test` (or `bun test`).
 
 ## What it actually does
 
-- **Log in** — one admin account, password hashed with `scrypt`, session is
+- **Accounts** — anyone can sign up and log in; passwords are hashed with `scrypt`, and sessions are
   a signed cookie (no session database table needed).
-- **Write a post** — Markdown in a textarea, rendered live in a side panel
+- **Write a post** — every post belongs to its author, and Markdown is rendered live in a side panel
   as you type, via a WebSocket round-trip to the server.
 - **Upload a cover photo** — dropped into the post form, resized server-side
   into thumbnail / medium / large `.webp` variants.
 - **Publish** — flips a post from draft to live on the public site.
-- **Readers comment** — no login required, just a name and a message.
+- **Readers comment** — only signed-in accounts can comment, always under their account name.
 - **RSS feed** — `/feed.xml`, works in any real feed reader.
 - **Persistence** — everything lives in a real SQLite file (`data/minipress.sqlite`),
   survives restarts.
 
 ## What it deliberately doesn't do (be honest about limits)
 
-- **One admin account.** No multi-user roles, no signup flow. This is a
-  personal blog engine, not a multi-tenant CMS.
+- **No roles or moderation tools.** Every account can create its own posts;
+  there is no privileged administrator role.
 - **No comment moderation queue.** Comments post immediately, no spam
   filter, no approve/reject UI. If you ship this for real, add a
   `comments.approved` flag and gate the public view on it — the column
@@ -55,9 +52,9 @@ Run the tests: `make test` (or `bun test`).
 - **No password reset / email at all.** There is no email sending anywhere
   in this project (nothing in any language's standard library sends email
   without a package — see STDLIB.md). Forgot your password: reset it
-  directly in the SQLite file, or add a new admin with the CLI script.
-- **No rate limiting on login.** A determined attacker can brute-force the
-  admin password with unlimited attempts. Fine for a hackathon demo behind
+  directly in the SQLite file, or create another account through the signup page.
+- **No rate limiting on login or signup.** A determined attacker can brute-force an
+  account password with unlimited attempts. Fine for a hackathon demo behind
   a strong password; not fine for a real deployment — add a login attempt
   counter before you'd trust this with real user data.
 - **http, not https, out of the box.** `Bun.serve()` here isn't wired to
@@ -108,7 +105,7 @@ survived. Documented, not hidden.
   with a server-only secret generated on first run
   (`data/.session-secret`, `chmod 600`). A forged or edited cookie fails
   signature verification and is treated as logged-out.
-- **CSRF** on state-changing admin actions — a token derived from the
+- **CSRF** on state-changing account actions and comments — a token derived from the
   session (via HMAC) is embedded in every form and re-verified on submit.
 - **Path traversal** on the `/uploads/:filename` route — filenames
   containing `..` or `/` are rejected before touching the filesystem.
@@ -137,9 +134,9 @@ mini-press/
     images.js           Bun.Image resize pipeline
     rss.js               hand-rolled RSS 2.0 XML
     render.js             HTML page templates (template literals)
-    scripts/create-admin.js
+    scripts/create-user.js
   public/
-    site.css, admin.css, editor.js (live preview client)
+    site.css, account.css, editor.js (live preview client)
   tests/            bun:test suites for markdown, auth, rss, router
   data/             created at runtime: sqlite db + uploaded images (gitignored)
   README.md, STDLIB.md, CLAUDE.md, Makefile, package.json, deps-proof.txt

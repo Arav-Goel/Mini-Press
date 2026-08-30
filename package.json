@@ -10,7 +10,7 @@
     "start": "bun src/server.js",
     "dev": "bun --watch src/server.js",
     "test": "bun test",
-    "create-admin": "bun src/scripts/create-admin.js"
+    "create-user": "bun src/scripts/create-user.js"
   },
   "dependencies": {},
   "devDependencies": {},

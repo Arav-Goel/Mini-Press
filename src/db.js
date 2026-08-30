@@ -28,6 +28,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS posts (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER REFERENCES users(id),
     slug         TEXT UNIQUE NOT NULL,
     title        TEXT NOT NULL,
     markdown     TEXT NOT NULL DEFAULT '',
@@ -40,6 +41,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS comments (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    user_id    INTEGER REFERENCES users(id),
     author     TEXT NOT NULL,
     body       TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -48,6 +50,24 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_posts_published ON posts(published, created_at);
   CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
 `);
+
+// Existing installations predate account-owned posts and comments. SQLite
+// cannot add a column through CREATE TABLE IF NOT EXISTS, so migrate those
+// databases in place. Legacy rows remain readable, but only posts with an
+// owner can be changed through the account UI.
+function hasColumn(table, column) {
+  return db.query(`PRAGMA table_info(${table})`).all().some((entry) => entry.name === column);
+}
+
+if (!hasColumn("posts", "user_id")) {
+  db.exec("ALTER TABLE posts ADD COLUMN user_id INTEGER REFERENCES users(id)");
+}
+if (!hasColumn("comments", "user_id")) {
+  db.exec("ALTER TABLE comments ADD COLUMN user_id INTEGER REFERENCES users(id)");
+}
+
+db.exec("CREATE INDEX IF NOT EXISTS idx_posts_user ON posts(user_id, created_at)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_comments_user ON comments(user_id)");
 
 // --- users ---
 export const insertUser = db.prepare(
@@ -61,23 +81,24 @@ export const countUsers = db.prepare(`SELECT COUNT(*) AS n FROM users`);
 
 // --- posts ---
 export const insertPost = db.prepare(
-  `INSERT INTO posts (slug, title, markdown, published) VALUES (?, ?, ?, ?)`
+  `INSERT INTO posts (user_id, slug, title, markdown, published) VALUES (?, ?, ?, ?, ?)`
 );
 export const updatePost = db.prepare(`
   UPDATE posts SET title = ?, markdown = ?, updated_at = datetime('now')
-  WHERE id = ?
+  WHERE id = ? AND user_id = ?
 `);
 export const setPostPublished = db.prepare(
-  `UPDATE posts SET published = ?, updated_at = datetime('now') WHERE id = ?`
+  `UPDATE posts SET published = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?`
 );
 export const setPostCoverImage = db.prepare(
-  `UPDATE posts SET cover_image = ?, updated_at = datetime('now') WHERE id = ?`
+  `UPDATE posts SET cover_image = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?`
 );
-export const deletePost = db.prepare(`DELETE FROM posts WHERE id = ?`);
+export const deletePost = db.prepare(`DELETE FROM posts WHERE id = ? AND user_id = ?`);
 export const getPostById = db.prepare(`SELECT * FROM posts WHERE id = ?`);
+export const getPostByIdForUser = db.prepare(`SELECT * FROM posts WHERE id = ? AND user_id = ?`);
 export const getPostBySlug = db.prepare(`SELECT * FROM posts WHERE slug = ?`);
-export const listAllPosts = db.prepare(
-  `SELECT * FROM posts ORDER BY created_at DESC`
+export const listPostsForUser = db.prepare(
+  `SELECT * FROM posts WHERE user_id = ? ORDER BY created_at DESC`
 );
 export const listPublishedPosts = db.prepare(
   `SELECT * FROM posts WHERE published = 1 ORDER BY created_at DESC LIMIT ?`
@@ -85,8 +106,10 @@ export const listPublishedPosts = db.prepare(
 
 // --- comments ---
 export const insertComment = db.prepare(
-  `INSERT INTO comments (post_id, author, body) VALUES (?, ?, ?)`
+  `INSERT INTO comments (post_id, user_id, author, body) VALUES (?, ?, ?, ?)`
 );
 export const listCommentsForPost = db.prepare(
-  `SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC`
+  `SELECT comments.*, COALESCE(users.username, comments.author) AS username
+   FROM comments LEFT JOIN users ON users.id = comments.user_id
+   WHERE comments.post_id = ? ORDER BY comments.created_at ASC`
 );

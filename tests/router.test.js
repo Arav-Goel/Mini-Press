@@ -34,7 +34,7 @@ test("returns null when nothing matches, instead of throwing", async () => {
 
 test("multiple params in one path", async () => {
   const router = new Router();
-  router.post("/admin/posts/:id/publish", async (req, { params }) => new Response(params.id));
-  const res = await router.handle(new Request("http://x/admin/posts/42/publish", { method: "POST" }), {});
+  router.post("/account/posts/:id/publish", async (req, { params }) => new Response(params.id));
+  const res = await router.handle(new Request("http://x/account/posts/42/publish", { method: "POST" }), {});
   expect(await res.text()).toBe("42");
 });

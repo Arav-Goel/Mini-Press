@@ -14,7 +14,7 @@ import { renderMarkdown } from "./markdown.js";
 import { processUpload, verifyImageSupport } from "./images.js";
 import { buildRssFeed } from "./rss.js";
 import {
-  renderHome, renderPost, renderLogin, renderDashboard, renderEditor,
+  renderHome, renderPost, renderLogin, renderSignup, renderDashboard, renderEditor,
 } from "./render.js";
 
 const PORT = Number(process.env.PORT || 3000);
@@ -44,32 +44,44 @@ function requireAuth(req) {
   return session; // null if not authenticated
 }
 
+function currentUser(req) {
+  const session = requireAuth(req);
+  return session ? db.getUserById.get(session.userId) : null;
+}
+
 const router = new Router();
 
 // ---------- public site ----------
 
-router.get("/", async () => {
+router.get("/", async (req) => {
   const posts = db.listPublishedPosts.all(50);
-  return html(renderHome(posts));
+  return html(renderHome(posts, currentUser(req)));
 });
 
 router.get("/post/:slug", async (req, { params }) => {
   const post = db.getPostBySlug.get(params.slug);
   if (!post || !post.published) return notFound();
   const comments = db.listCommentsForPost.all(post.id);
-  return html(renderPost(post, comments));
+  const user = currentUser(req);
+  const csrfToken = user ? auth.csrfTokenFor(req.headers.get("cookie")) : null;
+  return html(renderPost(post, comments, user, csrfToken));
 });
 
 router.post("/post/:slug/comments", async (req, { params }) => {
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
   const post = db.getPostBySlug.get(params.slug);
   if (!post || !post.published) return notFound();
 
   const form = await req.formData();
-  const author = String(form.get("author") || "").trim().slice(0, 80);
+  if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) {
+    return new Response("Invalid CSRF token", { status: 403 });
+  }
   const body = String(form.get("body") || "").trim().slice(0, 2000);
-  if (!author || !body) return redirect(`/post/${params.slug}`);
+  if (!body) return redirect(`/post/${params.slug}`);
 
-  db.insertComment.run(post.id, author, body);
+  // The displayed name comes from the signed-in account, never a form field.
+  db.insertComment.run(post.id, user.id, user.username, body);
   return redirect(`/post/${params.slug}#comments`);
 });
 
@@ -103,17 +115,17 @@ async function staticFile(path) {
 }
 
 router.get("/site.css", async () => staticFile("./public/site.css"));
-router.get("/admin.css", async () => staticFile("./public/admin.css"));
+router.get("/account.css", async () => staticFile("./public/account.css"));
 router.get("/editor.js", async () => staticFile("./public/editor.js"));
 
-// ---------- admin auth ----------
+// ---------- accounts ----------
 
-router.get("/admin/login", async (req) => {
-  if (requireAuth(req)) return redirect("/admin");
+router.get("/login", async (req) => {
+  if (currentUser(req)) return redirect("/account");
   return html(renderLogin());
 });
 
-router.post("/admin/login", async (req) => {
+router.post("/login", async (req) => {
   const form = await req.formData();
   const username = String(form.get("username") || "");
   const password = String(form.get("password") || "");
@@ -122,40 +134,70 @@ router.post("/admin/login", async (req) => {
   const ok = user && auth.verifyPassword(password, user.password_hash, user.salt);
   if (!ok) return html(renderLogin({ error: "Invalid username or password." }), { status: 401 });
 
-  return redirect("/admin", { "set-cookie": auth.createSessionCookie(user.id) });
+  return redirect("/account", { "set-cookie": auth.createSessionCookie(user.id) });
 });
 
-router.post("/admin/logout", async () => {
-  return redirect("/admin/login", { "set-cookie": auth.clearSessionCookie() });
+router.get("/signup", async (req) => {
+  if (currentUser(req)) return redirect("/account");
+  return html(renderSignup());
 });
 
-// ---------- admin, all routes below require a session ----------
+router.post("/signup", async (req) => {
+  const form = await req.formData();
+  const username = String(form.get("username") || "").trim();
+  const password = String(form.get("password") || "");
+  if (!/^[A-Za-z0-9_-]{3,40}$/.test(username)) {
+    return html(renderSignup({ error: "Use 3–40 letters, numbers, underscores, or hyphens for your username." }), { status: 400 });
+  }
+  if (password.length < 8) {
+    return html(renderSignup({ error: "Password must be at least 8 characters." }), { status: 400 });
+  }
+  if (db.getUserByUsername.get(username)) {
+    return html(renderSignup({ error: "That username is already taken." }), { status: 409 });
+  }
+  const { hash, salt } = auth.hashPassword(password);
+  const result = db.insertUser.run(username, hash, salt);
+  return redirect("/account", { "set-cookie": auth.createSessionCookie(Number(result.lastInsertRowid)) });
+});
 
-router.get("/admin", async (req) => {
+router.post("/logout", async (req) => {
   const session = requireAuth(req);
-  if (!session) return redirect("/admin/login");
-  return html(renderDashboard(db.listAllPosts.all()));
+  if (!session) return redirect("/");
+  const form = await req.formData();
+  if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) {
+    return new Response("Invalid CSRF token", { status: 403 });
+  }
+  return redirect("/", { "set-cookie": auth.clearSessionCookie() });
 });
 
-router.get("/admin/new", async (req) => {
-  const session = requireAuth(req);
-  if (!session) return redirect("/admin/login");
+// ---------- account, all routes below require the post owner ----------
+
+router.get("/account", async (req) => {
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
   const token = auth.csrfTokenFor(req.headers.get("cookie"));
-  return html(renderEditor({}, token));
+  return html(renderDashboard(db.listPostsForUser.all(user.id), user, token));
 });
 
-router.get("/admin/posts/:id/edit", async (req, { params }) => {
-  const session = requireAuth(req);
-  if (!session) return redirect("/admin/login");
-  const post = db.getPostById.get(Number(params.id));
+router.get("/account/new", async (req) => {
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
+  const token = auth.csrfTokenFor(req.headers.get("cookie"));
+  return html(renderEditor({}, token, user));
+});
+
+router.get("/account/posts/:id/edit", async (req, { params }) => {
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
+  const post = db.getPostByIdForUser.get(Number(params.id), user.id);
   if (!post) return notFound();
   const token = auth.csrfTokenFor(req.headers.get("cookie"));
-  return html(renderEditor(post, token));
+  return html(renderEditor(post, token, user));
 });
 
 async function handleSavePost(req, existingId) {
-  const session = requireAuth(req);
-  if (!session) return redirect("/admin/login");
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
 
   const form = await req.formData();
   if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) {
@@ -168,10 +210,10 @@ async function handleSavePost(req, existingId) {
 
   let postId = existingId;
   if (postId) {
-    db.updatePost.run(title, markdown, postId);
+    if (db.updatePost.run(title, markdown, postId, user.id).changes === 0) return notFound();
   } else {
     const slug = slugify(title);
-    const result = db.insertPost.run(slug, title, markdown, 0);
+    const result = db.insertPost.run(user.id, slug, title, markdown, 0);
     postId = Number(result.lastInsertRowid);
   }
 
@@ -179,29 +221,36 @@ async function handleSavePost(req, existingId) {
   if (cover && typeof cover === "object" && cover.size > 0) {
     const buffer = Buffer.from(await cover.arrayBuffer());
     const stem = await processUpload(buffer, postId);
-    db.setPostCoverImage.run(stem, postId);
+    db.setPostCoverImage.run(stem, postId, user.id);
   }
 
-  return redirect(`/admin/posts/${postId}/edit`);
+  return redirect(`/account/posts/${postId}/edit`);
 }
 
-router.post("/admin/posts", async (req) => handleSavePost(req, null));
-router.post("/admin/posts/:id", async (req, { params }) => handleSavePost(req, Number(params.id)));
+router.post("/account/posts", async (req) => handleSavePost(req, null));
+router.post("/account/posts/:id", async (req, { params }) => handleSavePost(req, Number(params.id)));
 
-router.post("/admin/posts/:id/publish", async (req, { params }) => {
-  const session = requireAuth(req);
-  if (!session) return redirect("/admin/login");
+router.post("/account/posts/:id/publish", async (req, { params }) => {
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
   const form = await req.formData();
+  if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) {
+    return new Response("Invalid CSRF token", { status: 403 });
+  }
   const published = String(form.get("published") || "0") === "1" ? 1 : 0;
-  db.setPostPublished.run(published, Number(params.id));
-  return redirect(`/admin/posts/${params.id}/edit`);
+  if (db.setPostPublished.run(published, Number(params.id), user.id).changes === 0) return notFound();
+  return redirect(`/account/posts/${params.id}/edit`);
 });
 
-router.post("/admin/posts/:id/delete", async (req, { params }) => {
-  const session = requireAuth(req);
-  if (!session) return redirect("/admin/login");
-  db.deletePost.run(Number(params.id));
-  return redirect("/admin");
+router.post("/account/posts/:id/delete", async (req, { params }) => {
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
+  const form = await req.formData();
+  if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) {
+    return new Response("Invalid CSRF token", { status: 403 });
+  }
+  if (db.deletePost.run(Number(params.id), user.id).changes === 0) return notFound();
+  return redirect("/account");
 });
 
 // ---------- websocket: live markdown preview ----------
@@ -224,7 +273,7 @@ async function main() {
 
   if (db.countUsers.get().n === 0) {
     console.log(
-      "No admin user exists yet. Run: bun src/scripts/create-admin.js <username> <password>"
+      "No accounts exist yet. Create one at /signup."
     );
   }
 
@@ -232,7 +281,7 @@ async function main() {
     port: PORT,
     async fetch(req, server) {
       const url = new URL(req.url);
-      if (url.pathname === "/admin/preview-ws") {
+      if (url.pathname === "/account/preview-ws") {
         const session = requireAuth(req);
         if (!session) return new Response("Unauthorized", { status: 401 });
         if (server.upgrade(req)) return; // hands off to wsHandlers
