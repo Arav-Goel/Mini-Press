@@ -19,6 +19,7 @@ import {
 
 const PORT = Number(process.env.PORT || 3000);
 const SITE_URL = process.env.SITE_URL || `http://localhost:${PORT}`;
+const POSTS_PER_PAGE = 5;
 
 function slugify(title) {
   return title
@@ -39,6 +40,10 @@ function notFound() {
   return new Response("Not found", { status: 404 });
 }
 
+function likePattern(query) {
+  return `%${query.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
+}
+
 function requireAuth(req) {
   const session = auth.verifySessionCookie(req.headers.get("cookie"));
   return session; // null if not authenticated
@@ -54,8 +59,21 @@ const router = new Router();
 // ---------- public site ----------
 
 router.get("/", async (req) => {
-  const posts = db.listPublishedPosts.all(50);
-  return html(renderHome(posts, currentUser(req)));
+  const url = new URL(req.url);
+  const query = (url.searchParams.get("q") || "").trim().slice(0, 100);
+  const requestedPage = Number.parseInt(url.searchParams.get("page") || "1", 10);
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const pattern = likePattern(query);
+  const total = query
+    ? Number(db.countSearchPublishedPosts.get(pattern, pattern).n)
+    : Number(db.countPublishedPosts.get().n);
+  const totalPages = Math.max(1, Math.ceil(total / POSTS_PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+  const offset = (safePage - 1) * POSTS_PER_PAGE;
+  const posts = query
+    ? db.searchPublishedPostsPage.all(pattern, pattern, POSTS_PER_PAGE, offset)
+    : db.listPublishedPostsPage.all(POSTS_PER_PAGE, offset);
+  return html(renderHome({ posts, user: currentUser(req), query, page: safePage, totalPages, total }));
 });
 
 router.get("/post/:slug", async (req, { params }) => {
@@ -86,7 +104,7 @@ router.post("/post/:slug/comments", async (req, { params }) => {
 });
 
 router.get("/feed.xml", async () => {
-  const posts = db.listPublishedPosts.all(50);
+  const posts = db.listPublishedPostsPage.all(50, 0);
   const feed = buildRssFeed({
     siteTitle: "mini-press",
     siteUrl: SITE_URL,

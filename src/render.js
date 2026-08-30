@@ -6,11 +6,11 @@
 import { escapeHtml, renderMarkdown, excerpt } from "./markdown.js";
 import { imageVariantPaths } from "./images.js";
 
-function layout({ title, body, head = "", user = null, csrfToken = null }) {
+function layout({ title, body, head = "", user = null, csrfToken = null, activeTab = "", query = "" }) {
   const accountLink = user
-    ? `<a class="feed-link" href="/account">@${escapeHtml(user.username)}</a>
-       <form method="post" action="/logout" class="header-form"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><button>Log out</button></form>`
-    : `<a class="feed-link" href="/login">Log in</a><a class="feed-link" href="/signup">Create account</a>`;
+    ? `<a class="site-tab ${activeTab === "account" ? "is-active" : ""}" href="/account">@${escapeHtml(user.username)}</a>`
+    : `<a class="site-tab ${activeTab === "login" ? "is-active" : ""}" href="/login">Log in</a>
+       <a class="site-tab" href="/signup">Create account</a>`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -24,8 +24,15 @@ function layout({ title, body, head = "", user = null, csrfToken = null }) {
 <body>
   <header class="site-header">
     <a class="brand" href="/">mini-press</a>
-    <a class="feed-link" href="/feed.xml">RSS</a>
-    ${accountLink}
+    <nav class="site-tabs" aria-label="Primary navigation">
+      <a class="site-tab ${activeTab === "home" ? "is-active" : ""}" href="/">Home</a>
+      <form class="site-search" method="get" action="/" role="search">
+        <label class="sr-only" for="site-search-input">Search posts</label>
+        <input id="site-search-input" name="q" value="${escapeHtml(query)}" placeholder="Search posts" maxlength="100">
+        <button type="submit">Search</button>
+      </form>
+      ${accountLink}
+    </nav>
   </header>
   <main>${body}</main>
   <footer class="site-footer">Built zero-dependency for the Zero Dependency Hackathon.</footer>
@@ -33,20 +40,44 @@ function layout({ title, body, head = "", user = null, csrfToken = null }) {
 </html>`;
 }
 
-export function renderHome(posts, user = null) {
+function readingTime(markdown) {
+  const words = String(markdown || "").trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.ceil(words / 200));
+}
+
+function pageLink(page, query, label, current = false) {
+  const params = new URLSearchParams({ page: String(page) });
+  if (query) params.set("q", query);
+  return `<a class="page-link${current ? " is-current" : ""}" href="/?${params}">${label}</a>`;
+}
+
+export function renderHome({ posts, user = null, query = "", page = 1, totalPages = 1, total = 0 }) {
   const items = posts.map((post) => {
     const cover = imageVariantPaths(post.cover_image);
-    const coverHtml = cover ? `<img class="post-thumb" src="${cover.thumb}" alt="">` : "";
+    const coverHtml = cover
+      ? `<img class="post-thumb" src="${cover.thumb}" alt="">`
+      : `<div class="post-thumb post-thumb-placeholder" aria-hidden="true">MP</div>`;
     return `
     <article class="post-card">
-      ${coverHtml}
-      <h2><a href="/post/${encodeURIComponent(post.slug)}">${escapeHtml(post.title)}</a></h2>
-      <p class="post-excerpt">${escapeHtml(excerpt(post.markdown))}</p>
-      <time datetime="${post.created_at}">${escapeHtml(post.created_at)}</time>
+      <a class="post-thumb-link" href="/post/${encodeURIComponent(post.slug)}" aria-label="Read ${escapeHtml(post.title)}">${coverHtml}</a>
+      <div class="post-card-copy">
+        <h2><a href="/post/${encodeURIComponent(post.slug)}">${escapeHtml(post.title)}</a></h2>
+        <p class="post-excerpt">${escapeHtml(excerpt(post.markdown))}</p>
+        <p class="post-meta"><time datetime="${post.created_at}">${escapeHtml(post.created_at)}</time><span aria-hidden="true">·</span>${readingTime(post.markdown)} min read</p>
+      </div>
     </article>`;
-  }).join("") || `<p class="empty">No posts yet.</p>`;
+  }).join("") || `<p class="empty">${query ? `No published posts match “${escapeHtml(query)}”.` : "No posts yet."}</p>`;
 
-  return layout({ title: "mini-press", body: `<h1>Latest posts</h1><div class="post-list">${items}</div>`, user });
+  const heading = query ? `Search results for “${escapeHtml(query)}”` : "Latest posts";
+  const pagination = totalPages > 1 ? `
+    <nav class="pagination" aria-label="Post pages">
+      ${page > 1 ? pageLink(page - 1, query, "← Newer") : ""}
+      ${Array.from({ length: totalPages }, (_, index) => pageLink(index + 1, query, String(index + 1), index + 1 === page)).join("")}
+      ${page < totalPages ? pageLink(page + 1, query, "Older →") : ""}
+    </nav>` : "";
+
+  const resultCount = query ? `<p class="feed-summary">${total} ${total === 1 ? "post" : "posts"} found</p>` : "";
+  return layout({ title: query ? `Search — mini-press` : "mini-press", body: `<section class="feed-heading"><h1>${heading}</h1>${resultCount}</section><div class="post-list">${items}</div>${pagination}`, user, activeTab: "home", query });
 }
 
 export function renderPost(post, comments, user = null, csrfToken = null) {
@@ -81,7 +112,7 @@ export function renderPost(post, comments, user = null, csrfToken = null) {
       ${commentForm}
     </section>`;
 
-  return layout({ title: post.title, body, user, csrfToken });
+  return layout({ title: post.title, body, user, csrfToken, query: "" });
 }
 
 const ACCOUNT_HEAD = `<link rel="stylesheet" href="/account.css">`;
@@ -97,7 +128,7 @@ export function renderLogin({ error } = {}) {
       <button type="submit">Log in</button>
     </form>
     <p>New here? <a href="/signup">Create an account</a>.</p>`;
-  return layout({ title: "Log in — mini-press", body, head: ACCOUNT_HEAD });
+  return layout({ title: "Log in — mini-press", body, head: ACCOUNT_HEAD, activeTab: "login" });
 }
 
 export function renderSignup({ error } = {}) {
@@ -120,6 +151,7 @@ export function renderDashboard(posts, user, csrfToken) {
       <td><a href="/account/posts/${post.id}/edit">${escapeHtml(post.title)}</a></td>
       <td>${post.published ? "Published" : "Draft"}</td>
       <td>${escapeHtml(post.updated_at)}</td>
+      <td class="post-actions"><a href="/account/posts/${post.id}/edit">Edit</a><form method="post" action="/account/posts/${post.id}/delete"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><button class="text-danger" onclick="return confirm('Delete this post?')">Delete</button></form></td>
     </tr>`).join("");
 
   const body = `
@@ -128,10 +160,11 @@ export function renderDashboard(posts, user, csrfToken) {
       <a class="button" href="/account/new">New post</a>
     </div>
     <table class="post-table">
-      <thead><tr><th>Title</th><th>Status</th><th>Updated</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="3">No posts yet.</td></tr>`}</tbody>
+      <thead><tr><th>Title</th><th>Status</th><th>Updated</th><th><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="4">No posts yet.</td></tr>`}</tbody>
     </table>`;
-  return layout({ title: "My posts — mini-press", body, head: ACCOUNT_HEAD, user, csrfToken });
+  const accountBody = `${body}<form method="post" action="/logout" class="account-logout"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><button>Log out</button></form>`;
+  return layout({ title: "My posts — mini-press", body: accountBody, head: ACCOUNT_HEAD, user, csrfToken, activeTab: "account" });
 }
 
 // The editor page ships a WebSocket-driven live preview: as you type, the

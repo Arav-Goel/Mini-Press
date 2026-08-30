@@ -35,3 +35,17 @@ test("comments retain the authenticated account identity", () => {
   expect(comment.user_id).toBe(commenter);
   expect(comment.username).toBe("commenter");
 });
+
+test("published posts can be paginated independently from drafts", () => {
+  const user = createUser("publisher");
+  const before = Number(db.countPublishedPosts.get().n);
+  for (let i = 0; i < 6; i++) {
+    db.insertPost.run(user, `page-post-${i}`, `Page post ${i}`, "published body", 1);
+  }
+  db.insertPost.run(user, "hidden-draft", "Hidden draft", "draft body", 0);
+
+  const total = before + 6;
+  expect(db.countPublishedPosts.get().n).toBe(total);
+  expect(db.listPublishedPostsPage.all(5, 0)).toHaveLength(Math.min(5, total));
+  expect(db.listPublishedPostsPage.all(5, 5)).toHaveLength(Math.min(5, total - 5));
+});

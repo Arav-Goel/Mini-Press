@@ -100,8 +100,20 @@ export const getPostBySlug = db.prepare(`SELECT * FROM posts WHERE slug = ?`);
 export const listPostsForUser = db.prepare(
   `SELECT * FROM posts WHERE user_id = ? ORDER BY created_at DESC`
 );
-export const listPublishedPosts = db.prepare(
-  `SELECT * FROM posts WHERE published = 1 ORDER BY created_at DESC LIMIT ?`
+export const listPublishedPostsPage = db.prepare(
+  `SELECT * FROM posts WHERE published = 1 ORDER BY created_at DESC LIMIT ? OFFSET ?`
+);
+export const countPublishedPosts = db.prepare(
+  `SELECT COUNT(*) AS n FROM posts WHERE published = 1`
+);
+export const searchPublishedPostsPage = db.prepare(
+  `SELECT * FROM posts
+   WHERE published = 1 AND (title LIKE ? ESCAPE '\\' OR markdown LIKE ? ESCAPE '\\')
+   ORDER BY created_at DESC LIMIT ? OFFSET ?`
+);
+export const countSearchPublishedPosts = db.prepare(
+  `SELECT COUNT(*) AS n FROM posts
+   WHERE published = 1 AND (title LIKE ? ESCAPE '\\' OR markdown LIKE ? ESCAPE '\\')`
 );
 
 // --- comments ---
