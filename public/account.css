@@ -1,12 +1,21 @@
 /* Loaded alongside site.css on account pages for the editor and post list. */
-.account-bar { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
-.account-bar .button { background: var(--accent); color: white; padding: 0.5rem 1rem; border-radius: 4px; text-decoration: none; }
+.account-hero { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; padding: 1.75rem; margin-bottom: 1.25rem; border-radius: 10px; background: #f2efe9; }
+.account-hero h1 { margin: 0.25rem 0; font-size: 2.15rem; }
+.account-hero p:last-child { margin: 0; color: var(--muted); }
+.account-hero-actions { display: flex; gap: 0.65rem; flex-wrap: wrap; }
+.button { background: var(--accent); color: white; padding: 0.55rem 0.85rem; border-radius: 4px; text-decoration: none; white-space: nowrap; }
+.secondary-button { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.account-panel { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.account-panel-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 1rem 1.1rem 0.8rem; }
+.account-panel-heading h2 { margin: 0; font-size: 1.1rem; }
+.account-panel-heading span { color: var(--muted); font-size: 0.85rem; }
 .post-table { width: 100%; border-collapse: collapse; }
 .post-table th, .post-table td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--line); }
 .post-actions { display: flex; align-items: center; gap: 0.7rem; }
 .post-actions form { margin: 0; }
 .post-actions a, .text-danger { color: var(--accent); text-decoration: none; font: inherit; background: transparent; padding: 0; }
 .account-logout { margin-top: 1.5rem; }
+.role-label { display: inline-block; margin-left: 0.5rem; color: var(--accent); font-size: 0.75rem; font-weight: normal; }
 
 .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start; }
 .editor-form { display: flex; flex-direction: column; gap: 0.75rem; }
@@ -20,6 +29,8 @@ button.danger { background: #7a1f1f; }
 .preview-pane { border: 1px solid var(--line); border-radius: 6px; padding: 1rem; max-height: 80vh; overflow-y: auto; }
 
 @media (max-width: 800px) {
+  .account-hero { align-items: flex-start; flex-direction: column; }
+  .account-panel { overflow-x: auto; }
   .editor-grid { grid-template-columns: 1fr; }
   main { max-width: 100%; }
 }

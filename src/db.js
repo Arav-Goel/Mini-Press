@@ -23,6 +23,7 @@ db.exec(`
     username      TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,   -- hex scrypt output
     salt          TEXT NOT NULL,   -- hex, unique per user
+    is_admin      INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -65,6 +66,15 @@ if (!hasColumn("posts", "user_id")) {
 if (!hasColumn("comments", "user_id")) {
   db.exec("ALTER TABLE comments ADD COLUMN user_id INTEGER REFERENCES users(id)");
 }
+if (!hasColumn("users", "is_admin")) {
+  db.exec("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0");
+}
+
+// The requested site administrator is explicitly named, rather than inferred
+// from registration order. This remains safe when the account does not exist:
+// the update simply affects zero rows until adminjs signs up.
+export const promoteUsernameToAdmin = db.prepare(`UPDATE users SET is_admin = 1 WHERE username = ?`);
+promoteUsernameToAdmin.run("adminjs");
 
 db.exec("CREATE INDEX IF NOT EXISTS idx_posts_user ON posts(user_id, created_at)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_comments_user ON comments(user_id)");
@@ -78,6 +88,22 @@ export const getUserByUsername = db.prepare(
 );
 export const getUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 export const countUsers = db.prepare(`SELECT COUNT(*) AS n FROM users`);
+export const listUsersForAdmin = db.prepare(`
+  SELECT users.id, users.username, users.created_at, users.is_admin,
+    (SELECT COUNT(*) FROM posts WHERE posts.user_id = users.id) AS post_count,
+    (SELECT COUNT(*) FROM comments WHERE comments.user_id = users.id) AS comment_count
+  FROM users ORDER BY users.is_admin DESC, users.created_at ASC
+`);
+const deleteCommentsByUser = db.prepare(`DELETE FROM comments WHERE user_id = ?`);
+const deletePostsByUser = db.prepare(`DELETE FROM posts WHERE user_id = ?`);
+const deleteUser = db.prepare(`DELETE FROM users WHERE id = ? AND is_admin = 0`);
+export const deleteUserAndContent = db.transaction((userId) => {
+  // Remove authored comments first, then owned posts (whose comments cascade),
+  // so foreign-key constraints never leave orphaned identities behind.
+  deleteCommentsByUser.run(userId);
+  deletePostsByUser.run(userId);
+  return deleteUser.run(userId);
+});
 
 // --- posts ---
 export const insertPost = db.prepare(
@@ -96,20 +122,26 @@ export const setPostCoverImage = db.prepare(
 export const deletePost = db.prepare(`DELETE FROM posts WHERE id = ? AND user_id = ?`);
 export const getPostById = db.prepare(`SELECT * FROM posts WHERE id = ?`);
 export const getPostByIdForUser = db.prepare(`SELECT * FROM posts WHERE id = ? AND user_id = ?`);
-export const getPostBySlug = db.prepare(`SELECT * FROM posts WHERE slug = ?`);
+export const getPostBySlug = db.prepare(`
+  SELECT posts.*, users.username AS author_username
+  FROM posts LEFT JOIN users ON users.id = posts.user_id WHERE posts.slug = ?
+`);
 export const listPostsForUser = db.prepare(
   `SELECT * FROM posts WHERE user_id = ? ORDER BY created_at DESC`
 );
 export const listPublishedPostsPage = db.prepare(
-  `SELECT * FROM posts WHERE published = 1 ORDER BY created_at DESC LIMIT ? OFFSET ?`
+  `SELECT posts.*, users.username AS author_username
+   FROM posts LEFT JOIN users ON users.id = posts.user_id
+   WHERE posts.published = 1 ORDER BY posts.created_at DESC LIMIT ? OFFSET ?`
 );
 export const countPublishedPosts = db.prepare(
   `SELECT COUNT(*) AS n FROM posts WHERE published = 1`
 );
 export const searchPublishedPostsPage = db.prepare(
-  `SELECT * FROM posts
-   WHERE published = 1 AND (title LIKE ? ESCAPE '\\' OR markdown LIKE ? ESCAPE '\\')
-   ORDER BY created_at DESC LIMIT ? OFFSET ?`
+  `SELECT posts.*, users.username AS author_username FROM posts
+   LEFT JOIN users ON users.id = posts.user_id
+   WHERE posts.published = 1 AND (posts.title LIKE ? ESCAPE '\\' OR posts.markdown LIKE ? ESCAPE '\\')
+   ORDER BY posts.created_at DESC LIMIT ? OFFSET ?`
 );
 export const countSearchPublishedPosts = db.prepare(
   `SELECT COUNT(*) AS n FROM posts

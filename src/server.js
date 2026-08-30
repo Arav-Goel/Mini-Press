@@ -15,6 +15,7 @@ import { processUpload, verifyImageSupport } from "./images.js";
 import { buildRssFeed } from "./rss.js";
 import {
   renderHome, renderPost, renderLogin, renderSignup, renderDashboard, renderEditor,
+  renderAdminUsers,
 } from "./render.js";
 
 const PORT = Number(process.env.PORT || 3000);
@@ -52,6 +53,11 @@ function requireAuth(req) {
 function currentUser(req) {
   const session = requireAuth(req);
   return session ? db.getUserById.get(session.userId) : null;
+}
+
+function requireAdmin(req) {
+  const user = currentUser(req);
+  return user?.is_admin ? user : null;
 }
 
 const router = new Router();
@@ -175,6 +181,7 @@ router.post("/signup", async (req) => {
   }
   const { hash, salt } = auth.hashPassword(password);
   const result = db.insertUser.run(username, hash, salt);
+  if (username === "adminjs") db.promoteUsernameToAdmin.run(username);
   return redirect("/account", { "set-cookie": auth.createSessionCookie(Number(result.lastInsertRowid)) });
 });
 
@@ -195,6 +202,26 @@ router.get("/account", async (req) => {
   if (!user) return redirect("/login");
   const token = auth.csrfTokenFor(req.headers.get("cookie"));
   return html(renderDashboard(db.listPostsForUser.all(user.id), user, token));
+});
+
+router.get("/account/admin", async (req) => {
+  const user = requireAdmin(req);
+  if (!user) return notFound();
+  const token = auth.csrfTokenFor(req.headers.get("cookie"));
+  return html(renderAdminUsers(db.listUsersForAdmin.all(), user, token));
+});
+
+router.post("/account/admin/users/:id/delete", async (req, { params }) => {
+  const user = requireAdmin(req);
+  if (!user) return notFound();
+  const form = await req.formData();
+  if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) {
+    return new Response("Invalid CSRF token", { status: 403 });
+  }
+  const targetId = Number(params.id);
+  if (!Number.isSafeInteger(targetId) || targetId === user.id) return new Response("Cannot delete this account", { status: 400 });
+  db.deleteUserAndContent(targetId);
+  return redirect("/account/admin");
 });
 
 router.get("/account/new", async (req) => {

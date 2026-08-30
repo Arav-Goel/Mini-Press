@@ -63,7 +63,7 @@ export function renderHome({ posts, user = null, query = "", page = 1, totalPage
       <div class="post-card-copy">
         <h2><a href="/post/${encodeURIComponent(post.slug)}">${escapeHtml(post.title)}</a></h2>
         <p class="post-excerpt">${escapeHtml(excerpt(post.markdown))}</p>
-        <p class="post-meta"><time datetime="${post.created_at}">${escapeHtml(post.created_at)}</time><span aria-hidden="true">·</span>${readingTime(post.markdown)} min read</p>
+        <p class="post-meta"><span>By @${escapeHtml(post.author_username || "unknown")}</span><span aria-hidden="true">·</span><time datetime="${post.created_at}">${escapeHtml(post.created_at)}</time><span aria-hidden="true">·</span>${readingTime(post.markdown)} min read</p>
       </div>
     </article>`;
   }).join("") || `<p class="empty">${query ? `No published posts match “${escapeHtml(query)}”.` : "No posts yet."}</p>`;
@@ -103,7 +103,7 @@ export function renderPost(post, comments, user = null, csrfToken = null) {
     <article class="post">
       ${coverHtml}
       <h1>${escapeHtml(post.title)}</h1>
-      <time datetime="${post.created_at}">${escapeHtml(post.created_at)}</time>
+      <p class="post-byline">By <strong>@${escapeHtml(post.author_username || "unknown")}</strong> <span aria-hidden="true">·</span> <time datetime="${post.created_at}">${escapeHtml(post.created_at)}</time> <span aria-hidden="true">·</span> ${readingTime(post.markdown)} min read</p>
       <div class="post-body">${renderMarkdown(post.markdown)}</div>
     </article>
     <section class="comments">
@@ -119,29 +119,31 @@ const ACCOUNT_HEAD = `<link rel="stylesheet" href="/account.css">`;
 
 export function renderLogin({ error } = {}) {
   const errorHtml = error ? `<p class="error">${escapeHtml(error)}</p>` : "";
-  const body = `
-    <h1>Log in</h1>
+  const body = `<section class="auth-shell"><div class="auth-card">
+    <p class="eyebrow">Welcome back</p><h1>Log in</h1><p class="auth-intro">Pick up where you left off.</p>
     ${errorHtml}
     <form method="post" action="/login" class="login-form">
-      <label>Username<br><input name="username" required autofocus></label>
-      <label>Password<br><input type="password" name="password" required></label>
+      <label>Username<input name="username" required autofocus></label>
+      <label>Password<input type="password" name="password" required></label>
       <button type="submit">Log in</button>
     </form>
-    <p>New here? <a href="/signup">Create an account</a>.</p>`;
+    <p class="auth-switch">New here? <a href="/signup">Create an account</a>.</p>
+  </div></section>`;
   return layout({ title: "Log in — mini-press", body, head: ACCOUNT_HEAD, activeTab: "login" });
 }
 
 export function renderSignup({ error } = {}) {
   const errorHtml = error ? `<p class="error">${escapeHtml(error)}</p>` : "";
-  const body = `
-    <h1>Create account</h1>
+  const body = `<section class="auth-shell"><div class="auth-card">
+    <p class="eyebrow">Join the conversation</p><h1>Create account</h1><p class="auth-intro">Share posts and comment under your own name.</p>
     ${errorHtml}
     <form method="post" action="/signup" class="login-form">
-      <label>Username<br><input name="username" required minlength="3" maxlength="40" pattern="[A-Za-z0-9_-]+" autofocus></label>
-      <label>Password<br><input type="password" name="password" required minlength="8"></label>
+      <label>Username<input name="username" required minlength="3" maxlength="40" pattern="[A-Za-z0-9_-]+" autofocus></label>
+      <label>Password<input type="password" name="password" required minlength="8"></label>
       <button type="submit">Create account</button>
     </form>
-    <p>Already have an account? <a href="/login">Log in</a>.</p>`;
+    <p class="auth-switch">Already have an account? <a href="/login">Log in</a>.</p>
+  </div></section>`;
   return layout({ title: "Create account — mini-press", body, head: ACCOUNT_HEAD });
 }
 
@@ -155,16 +157,34 @@ export function renderDashboard(posts, user, csrfToken) {
     </tr>`).join("");
 
   const body = `
-    <div class="account-bar">
-      <h1>${escapeHtml(user.username)}’s posts</h1>
-      <a class="button" href="/account/new">New post</a>
-    </div>
+    <section class="account-hero">
+      <div><p class="eyebrow">Your space</p><h1>@${escapeHtml(user.username)}</h1><p>Manage your drafts and published writing in one place.</p></div>
+      <div class="account-hero-actions"><a class="button" href="/account/new">Write a post</a>${user.is_admin ? `<a class="button secondary-button" href="/account/admin">Manage users</a>` : ""}</div>
+    </section>
+    <section class="account-panel">
+      <div class="account-panel-heading"><h2>Your posts</h2><span>${posts.length} ${posts.length === 1 ? "post" : "posts"}</span></div>
     <table class="post-table">
       <thead><tr><th>Title</th><th>Status</th><th>Updated</th><th><span class="sr-only">Actions</span></th></tr></thead>
       <tbody>${rows || `<tr><td colspan="4">No posts yet.</td></tr>`}</tbody>
-    </table>`;
+    </table></section>`;
   const accountBody = `${body}<form method="post" action="/logout" class="account-logout"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><button>Log out</button></form>`;
   return layout({ title: "My posts — mini-press", body: accountBody, head: ACCOUNT_HEAD, user, csrfToken, activeTab: "account" });
+}
+
+export function renderAdminUsers(users, user, csrfToken) {
+  const rows = users.map((account) => `
+    <tr>
+      <td><strong>@${escapeHtml(account.username)}</strong>${account.is_admin ? `<span class="role-label">Administrator</span>` : ""}</td>
+      <td>${account.post_count}</td>
+      <td>${account.comment_count}</td>
+      <td>${escapeHtml(account.created_at)}</td>
+      <td>${account.id === user.id || account.is_admin ? "" : `<form method="post" action="/account/admin/users/${account.id}/delete"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><button class="text-danger" onclick="return confirm('Delete @${escapeHtml(account.username)} and all of their posts and comments?')">Delete user</button></form>`}</td>
+    </tr>`).join("");
+  const body = `<section class="account-hero admin-hero"><div><p class="eyebrow">Administrator</p><h1>People on mini-press</h1><p>Deleting an account permanently removes its authored posts and comments.</p></div><a class="button secondary-button" href="/account">Back to account</a></section>
+    <section class="account-panel"><div class="account-panel-heading"><h2>Accounts</h2><span>${users.length} total</span></div>
+      <table class="post-table admin-table"><thead><tr><th>Account</th><th>Posts</th><th>Comments</th><th>Joined</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${rows}</tbody></table>
+    </section>`;
+  return layout({ title: "Manage users — mini-press", body, head: ACCOUNT_HEAD, user, csrfToken, activeTab: "account" });
 }
 
 // The editor page ships a WebSocket-driven live preview: as you type, the
