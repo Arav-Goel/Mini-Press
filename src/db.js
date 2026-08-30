@@ -48,6 +48,53 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS categories (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug        TEXT UNIQUE NOT NULL,
+    name        TEXT UNIQUE NOT NULL,
+    description TEXT NOT NULL DEFAULT ''
+  );
+
+  CREATE TABLE IF NOT EXISTS boards (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug        TEXT UNIQUE NOT NULL,
+    name        TEXT UNIQUE NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    creator_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS board_members (
+    board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
+    user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (board_id, user_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS follows (
+    follower_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    following_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (follower_id, following_id),
+    CHECK (follower_id != following_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS user_votes (
+    voter_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    target_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    value     INTEGER NOT NULL CHECK (value IN (-1, 1)),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (voter_id, target_id),
+    CHECK (voter_id != target_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS post_likes (
+    post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (post_id, user_id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_posts_published ON posts(published, created_at);
   CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
 `);
@@ -69,6 +116,12 @@ if (!hasColumn("comments", "user_id")) {
 if (!hasColumn("users", "is_admin")) {
   db.exec("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0");
 }
+if (!hasColumn("posts", "category_id")) {
+  db.exec("ALTER TABLE posts ADD COLUMN category_id INTEGER REFERENCES categories(id)");
+}
+if (!hasColumn("posts", "board_id")) {
+  db.exec("ALTER TABLE posts ADD COLUMN board_id INTEGER REFERENCES boards(id)");
+}
 
 // The requested site administrator is explicitly named, rather than inferred
 // from registration order. This remains safe when the account does not exist:
@@ -78,6 +131,17 @@ promoteUsernameToAdmin.run("adminjs");
 
 db.exec("CREATE INDEX IF NOT EXISTS idx_posts_user ON posts(user_id, created_at)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_comments_user ON comments(user_id)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_posts_category ON posts(category_id, created_at)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_posts_board ON posts(board_id, created_at)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id)");
+
+const seedCategory = db.prepare(`INSERT OR IGNORE INTO categories (slug, name, description) VALUES (?, ?, ?)`);
+for (const [slug, name, description] of [
+  ["general", "General", "Ideas, updates, and conversations."],
+  ["technology", "Technology", "Tools, software, and the future."],
+  ["design", "Design", "Visual craft and creative process."],
+  ["culture", "Culture", "Books, media, and shared interests."],
+]) seedCategory.run(slug, name, description);
 
 // --- users ---
 export const insertUser = db.prepare(
@@ -88,6 +152,23 @@ export const getUserByUsername = db.prepare(
 );
 export const getUserById = db.prepare(`SELECT * FROM users WHERE id = ?`);
 export const countUsers = db.prepare(`SELECT COUNT(*) AS n FROM users`);
+export const getPublicUser = db.prepare(`
+  SELECT users.id, users.username, users.created_at,
+    (SELECT COUNT(*) FROM follows WHERE following_id = users.id) AS follower_count,
+    (SELECT COUNT(*) FROM follows WHERE follower_id = users.id) AS following_count,
+    (SELECT COALESCE(SUM(value), 0) FROM user_votes WHERE target_id = users.id) AS score,
+    (SELECT COUNT(*) FROM posts WHERE user_id = users.id AND published = 1) AS post_count
+  FROM users WHERE username = ?
+`);
+export const getFollow = db.prepare(`SELECT 1 FROM follows WHERE follower_id = ? AND following_id = ?`);
+export const followUser = db.prepare(`INSERT OR IGNORE INTO follows (follower_id, following_id) VALUES (?, ?)`);
+export const unfollowUser = db.prepare(`DELETE FROM follows WHERE follower_id = ? AND following_id = ?`);
+export const getUserVote = db.prepare(`SELECT value FROM user_votes WHERE voter_id = ? AND target_id = ?`);
+export const setUserVote = db.prepare(`
+  INSERT INTO user_votes (voter_id, target_id, value) VALUES (?, ?, ?)
+  ON CONFLICT(voter_id, target_id) DO UPDATE SET value = excluded.value
+`);
+export const clearUserVote = db.prepare(`DELETE FROM user_votes WHERE voter_id = ? AND target_id = ?`);
 export const listUsersForAdmin = db.prepare(`
   SELECT users.id, users.username, users.created_at, users.is_admin,
     (SELECT COUNT(*) FROM posts WHERE posts.user_id = users.id) AS post_count,
@@ -107,10 +188,10 @@ export const deleteUserAndContent = db.transaction((userId) => {
 
 // --- posts ---
 export const insertPost = db.prepare(
-  `INSERT INTO posts (user_id, slug, title, markdown, published) VALUES (?, ?, ?, ?, ?)`
+  `INSERT INTO posts (user_id, slug, title, markdown, published, category_id, board_id) VALUES (?, ?, ?, ?, ?, ?, ?)`
 );
 export const updatePost = db.prepare(`
-  UPDATE posts SET title = ?, markdown = ?, updated_at = datetime('now')
+  UPDATE posts SET title = ?, markdown = ?, category_id = ?, board_id = ?, updated_at = datetime('now')
   WHERE id = ? AND user_id = ?
 `);
 export const setPostPublished = db.prepare(
@@ -123,15 +204,22 @@ export const deletePost = db.prepare(`DELETE FROM posts WHERE id = ? AND user_id
 export const getPostById = db.prepare(`SELECT * FROM posts WHERE id = ?`);
 export const getPostByIdForUser = db.prepare(`SELECT * FROM posts WHERE id = ? AND user_id = ?`);
 export const getPostBySlug = db.prepare(`
-  SELECT posts.*, users.username AS author_username
-  FROM posts LEFT JOIN users ON users.id = posts.user_id WHERE posts.slug = ?
+  SELECT posts.*, users.username AS author_username, categories.name AS category_name,
+    categories.slug AS category_slug, boards.name AS board_name, boards.slug AS board_slug,
+    (SELECT COUNT(*) FROM post_likes WHERE post_id = posts.id) AS like_count
+  FROM posts LEFT JOIN users ON users.id = posts.user_id
+  LEFT JOIN categories ON categories.id = posts.category_id
+  LEFT JOIN boards ON boards.id = posts.board_id WHERE posts.slug = ?
 `);
 export const listPostsForUser = db.prepare(
   `SELECT * FROM posts WHERE user_id = ? ORDER BY created_at DESC`
 );
 export const listPublishedPostsPage = db.prepare(
-  `SELECT posts.*, users.username AS author_username
+  `SELECT posts.*, users.username AS author_username, categories.name AS category_name,
+   categories.slug AS category_slug, boards.name AS board_name, boards.slug AS board_slug,
+   (SELECT COUNT(*) FROM post_likes WHERE post_id = posts.id) AS like_count
    FROM posts LEFT JOIN users ON users.id = posts.user_id
+   LEFT JOIN categories ON categories.id = posts.category_id LEFT JOIN boards ON boards.id = posts.board_id
    WHERE posts.published = 1 ORDER BY posts.created_at DESC LIMIT ? OFFSET ?`
 );
 export const countPublishedPosts = db.prepare(
@@ -147,6 +235,62 @@ export const countSearchPublishedPosts = db.prepare(
   `SELECT COUNT(*) AS n FROM posts
    WHERE published = 1 AND (title LIKE ? ESCAPE '\\' OR markdown LIKE ? ESCAPE '\\')`
 );
+export const listProfilePosts = db.prepare(`
+  SELECT posts.*, users.username AS author_username, categories.name AS category_name,
+    categories.slug AS category_slug, boards.name AS board_name, boards.slug AS board_slug,
+    (SELECT COUNT(*) FROM post_likes WHERE post_id = posts.id) AS like_count
+  FROM posts JOIN users ON users.id = posts.user_id
+  LEFT JOIN categories ON categories.id = posts.category_id LEFT JOIN boards ON boards.id = posts.board_id
+  WHERE users.username = ? AND posts.published = 1 ORDER BY posts.created_at DESC
+`);
+export const listFollowingPosts = db.prepare(`
+  SELECT posts.*, users.username AS author_username, categories.name AS category_name,
+    categories.slug AS category_slug, boards.name AS board_name, boards.slug AS board_slug,
+    (SELECT COUNT(*) FROM post_likes WHERE post_id = posts.id) AS like_count
+  FROM follows JOIN posts ON posts.user_id = follows.following_id
+  JOIN users ON users.id = posts.user_id
+  LEFT JOIN categories ON categories.id = posts.category_id LEFT JOIN boards ON boards.id = posts.board_id
+  WHERE follows.follower_id = ? AND posts.published = 1 ORDER BY posts.created_at DESC LIMIT ?
+`);
+export const getPostLike = db.prepare(`SELECT 1 FROM post_likes WHERE post_id = ? AND user_id = ?`);
+export const addPostLike = db.prepare(`INSERT OR IGNORE INTO post_likes (post_id, user_id) VALUES (?, ?)`);
+export const removePostLike = db.prepare(`DELETE FROM post_likes WHERE post_id = ? AND user_id = ?`);
+
+// --- categories and boards ---
+export const listCategories = db.prepare(`
+  SELECT categories.*, (SELECT COUNT(*) FROM posts WHERE category_id = categories.id AND published = 1) AS post_count
+  FROM categories ORDER BY name
+`);
+export const getCategoryById = db.prepare(`SELECT * FROM categories WHERE id = ?`);
+export const getCategoryBySlug = db.prepare(`SELECT * FROM categories WHERE slug = ?`);
+export const listCategoryPosts = db.prepare(`
+  SELECT posts.*, users.username AS author_username, categories.name AS category_name, categories.slug AS category_slug,
+    boards.name AS board_name, boards.slug AS board_slug, (SELECT COUNT(*) FROM post_likes WHERE post_id = posts.id) AS like_count
+  FROM posts JOIN users ON users.id = posts.user_id JOIN categories ON categories.id = posts.category_id
+  LEFT JOIN boards ON boards.id = posts.board_id WHERE categories.slug = ? AND posts.published = 1 ORDER BY posts.created_at DESC
+`);
+export const insertBoard = db.prepare(`INSERT INTO boards (slug, name, description, creator_id) VALUES (?, ?, ?, ?)`);
+export const listBoards = db.prepare(`
+  SELECT boards.*, users.username AS creator_username,
+    (SELECT COUNT(*) FROM board_members WHERE board_id = boards.id) AS member_count,
+    (SELECT COUNT(*) FROM posts WHERE board_id = boards.id AND published = 1) AS post_count
+  FROM boards JOIN users ON users.id = boards.creator_id ORDER BY boards.created_at DESC
+`);
+export const getBoardBySlug = db.prepare(`
+  SELECT boards.*, users.username AS creator_username,
+    (SELECT COUNT(*) FROM board_members WHERE board_id = boards.id) AS member_count
+  FROM boards JOIN users ON users.id = boards.creator_id WHERE boards.slug = ?
+`);
+export const getBoardById = db.prepare(`SELECT * FROM boards WHERE id = ?`);
+export const listBoardPosts = db.prepare(`
+  SELECT posts.*, users.username AS author_username, categories.name AS category_name, categories.slug AS category_slug,
+    boards.name AS board_name, boards.slug AS board_slug, (SELECT COUNT(*) FROM post_likes WHERE post_id = posts.id) AS like_count
+  FROM posts JOIN users ON users.id = posts.user_id JOIN boards ON boards.id = posts.board_id
+  LEFT JOIN categories ON categories.id = posts.category_id WHERE boards.slug = ? AND posts.published = 1 ORDER BY posts.created_at DESC
+`);
+export const getBoardMembership = db.prepare(`SELECT 1 FROM board_members WHERE board_id = ? AND user_id = ?`);
+export const joinBoard = db.prepare(`INSERT OR IGNORE INTO board_members (board_id, user_id) VALUES (?, ?)`);
+export const leaveBoard = db.prepare(`DELETE FROM board_members WHERE board_id = ? AND user_id = ?`);
 
 // --- comments ---
 export const insertComment = db.prepare(

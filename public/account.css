@@ -1,5 +1,5 @@
 /* Loaded alongside site.css on account pages for the editor and post list. */
-.account-hero { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; padding: 1.75rem; margin-bottom: 1.25rem; border-radius: 10px; background: #f2efe9; }
+.account-hero { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; padding: 1.75rem; margin-bottom: 1.25rem; border-radius: 10px; background: var(--soft); }
 .account-hero h1 { margin: 0.25rem 0; font-size: 2.15rem; }
 .account-hero p:last-child { margin: 0; color: var(--muted); }
 .account-hero-actions { display: flex; gap: 0.65rem; flex-wrap: wrap; }

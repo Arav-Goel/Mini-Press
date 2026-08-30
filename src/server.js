@@ -15,7 +15,7 @@ import { processUpload, verifyImageSupport } from "./images.js";
 import { buildRssFeed } from "./rss.js";
 import {
   renderHome, renderPost, renderLogin, renderSignup, renderDashboard, renderEditor,
-  renderAdminUsers,
+  renderAdminUsers, renderProfile, renderFollowing, renderCategories, renderBoards, renderBoard,
 } from "./render.js";
 
 const PORT = Number(process.env.PORT || 3000);
@@ -43,6 +43,11 @@ function notFound() {
 
 function likePattern(query) {
   return `%${query.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
+}
+function pageWithPosts(render, req, posts, extra = {}) {
+  const user = currentUser(req);
+  const token = user ? auth.csrfTokenFor(req.headers.get("cookie")) : null;
+  return html(render({ posts, user, csrfToken: token, ...extra }));
 }
 
 function requireAuth(req) {
@@ -88,7 +93,108 @@ router.get("/post/:slug", async (req, { params }) => {
   const comments = db.listCommentsForPost.all(post.id);
   const user = currentUser(req);
   const csrfToken = user ? auth.csrfTokenFor(req.headers.get("cookie")) : null;
+  post.viewer_liked = user ? Boolean(db.getPostLike.get(post.id, user.id)) : false;
   return html(renderPost(post, comments, user, csrfToken));
+});
+
+router.post("/post/:slug/like", async (req, { params }) => {
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
+  const post = db.getPostBySlug.get(params.slug);
+  if (!post || !post.published) return notFound();
+  const form = await req.formData();
+  if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) return new Response("Invalid CSRF token", { status: 403 });
+  if (db.getPostLike.get(post.id, user.id)) db.removePostLike.run(post.id, user.id);
+  else db.addPostLike.run(post.id, user.id);
+  return redirect(`/post/${params.slug}`);
+});
+
+router.get("/following", async (req) => {
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
+  return pageWithPosts(renderFollowing, req, db.listFollowingPosts.all(user.id, 50));
+});
+
+router.get("/categories", async (req) => {
+  return html(renderCategories(db.listCategories.all(), currentUser(req), auth.csrfTokenFor(req.headers.get("cookie"))));
+});
+router.get("/categories/:slug", async (req, { params }) => {
+  const category = db.getCategoryBySlug.get(params.slug);
+  if (!category) return notFound();
+  return pageWithPosts(renderFollowing, req, db.listCategoryPosts.all(params.slug), { heading: category.name, description: category.description, activeTab: "categories" });
+});
+
+router.get("/boards", async (req) => {
+  const user = currentUser(req);
+  return html(renderBoards(db.listBoards.all(), user, user ? auth.csrfTokenFor(req.headers.get("cookie")) : null));
+});
+router.post("/boards", async (req) => {
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
+  const form = await req.formData();
+  if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) return new Response("Invalid CSRF token", { status: 403 });
+  const name = String(form.get("name") || "").trim().slice(0, 60);
+  const description = String(form.get("description") || "").trim().slice(0, 300);
+  if (!name) return redirect("/boards");
+  const slug = slugify(name);
+  try {
+    const result = db.insertBoard.run(slug, name, description, user.id);
+    const board = db.getBoardById.get(Number(result.lastInsertRowid));
+    db.joinBoard.run(board.id, user.id);
+    return redirect(`/boards/${board.slug}`);
+  } catch { return redirect("/boards"); }
+});
+router.get("/boards/:slug", async (req, { params }) => {
+  const board = db.getBoardBySlug.get(params.slug);
+  if (!board) return notFound();
+  const user = currentUser(req);
+  const joined = user ? Boolean(db.getBoardMembership.get(board.id, user.id)) : false;
+  return html(renderBoard(board, db.listBoardPosts.all(params.slug), user, user ? auth.csrfTokenFor(req.headers.get("cookie")) : null, joined));
+});
+router.post("/boards/:slug/membership", async (req, { params }) => {
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
+  const board = db.getBoardBySlug.get(params.slug);
+  if (!board) return notFound();
+  const form = await req.formData();
+  if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) return new Response("Invalid CSRF token", { status: 403 });
+  if (db.getBoardMembership.get(board.id, user.id)) db.leaveBoard.run(board.id, user.id);
+  else db.joinBoard.run(board.id, user.id);
+  return redirect(`/boards/${params.slug}`);
+});
+
+router.get("/@:username", async (req, { params }) => {
+  const profile = db.getPublicUser.get(params.username);
+  if (!profile) return notFound();
+  const user = currentUser(req);
+  const isFollowing = user ? Boolean(db.getFollow.get(user.id, profile.id)) : false;
+  const vote = user ? db.getUserVote.get(user.id, profile.id)?.value ?? 0 : 0;
+  return html(renderProfile(profile, db.listProfilePosts.all(params.username), user, user ? auth.csrfTokenFor(req.headers.get("cookie")) : null, isFollowing, vote));
+});
+router.post("/@:username/follow", async (req, { params }) => {
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
+  const profile = db.getPublicUser.get(params.username);
+  if (!profile || profile.id === user.id) return notFound();
+  const form = await req.formData();
+  if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) return new Response("Invalid CSRF token", { status: 403 });
+  if (db.getFollow.get(user.id, profile.id)) db.unfollowUser.run(user.id, profile.id);
+  else db.followUser.run(user.id, profile.id);
+  return redirect(`/@${params.username}`);
+});
+router.post("/@:username/vote", async (req, { params }) => {
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
+  const profile = db.getPublicUser.get(params.username);
+  if (!profile || profile.id === user.id) return notFound();
+  const form = await req.formData();
+  if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) return new Response("Invalid CSRF token", { status: 403 });
+  const value = Number(form.get("value"));
+  if (value !== 1 && value !== -1) return new Response("Invalid vote", { status: 400 });
+  const existing = db.getUserVote.get(user.id, profile.id);
+  if (existing?.value === value) db.clearUserVote.run(user.id, profile.id);
+  else db.setUserVote.run(user.id, profile.id, value);
+  return redirect(`/@${params.username}`);
 });
 
 router.post("/post/:slug/comments", async (req, { params }) => {
@@ -141,6 +247,8 @@ async function staticFile(path) {
 router.get("/site.css", async () => staticFile("./public/site.css"));
 router.get("/account.css", async () => staticFile("./public/account.css"));
 router.get("/editor.js", async () => staticFile("./public/editor.js"));
+router.get("/theme.js", async () => staticFile("./public/theme.js"));
+router.get("/social.js", async () => staticFile("./public/social.js"));
 
 // ---------- accounts ----------
 
@@ -228,7 +336,7 @@ router.get("/account/new", async (req) => {
   const user = currentUser(req);
   if (!user) return redirect("/login");
   const token = auth.csrfTokenFor(req.headers.get("cookie"));
-  return html(renderEditor({}, token, user));
+  return html(renderEditor({}, token, user, db.listCategories.all(), db.listBoards.all()));
 });
 
 router.get("/account/posts/:id/edit", async (req, { params }) => {
@@ -237,7 +345,7 @@ router.get("/account/posts/:id/edit", async (req, { params }) => {
   const post = db.getPostByIdForUser.get(Number(params.id), user.id);
   if (!post) return notFound();
   const token = auth.csrfTokenFor(req.headers.get("cookie"));
-  return html(renderEditor(post, token, user));
+  return html(renderEditor(post, token, user, db.listCategories.all(), db.listBoards.all()));
 });
 
 async function handleSavePost(req, existingId) {
@@ -251,14 +359,18 @@ async function handleSavePost(req, existingId) {
 
   const title = String(form.get("title") || "").trim().slice(0, 200);
   const markdown = String(form.get("markdown") || "");
+  const categoryId = Number(form.get("category_id")) || null;
+  const boardId = Number(form.get("board_id")) || null;
   if (!title) return new Response("Title is required", { status: 400 });
+  if (categoryId && !db.getCategoryById.get(categoryId)) return new Response("Invalid category", { status: 400 });
+  if (boardId && !db.getBoardById.get(boardId)) return new Response("Invalid board", { status: 400 });
 
   let postId = existingId;
   if (postId) {
-    if (db.updatePost.run(title, markdown, postId, user.id).changes === 0) return notFound();
+    if (db.updatePost.run(title, markdown, categoryId, boardId, postId, user.id).changes === 0) return notFound();
   } else {
     const slug = slugify(title);
-    const result = db.insertPost.run(user.id, slug, title, markdown, 0);
+    const result = db.insertPost.run(user.id, slug, title, markdown, 0, categoryId, boardId);
     postId = Number(result.lastInsertRowid);
   }
 

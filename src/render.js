@@ -26,16 +26,22 @@ function layout({ title, body, head = "", user = null, csrfToken = null, activeT
     <a class="brand" href="/">mini-press</a>
     <nav class="site-tabs" aria-label="Primary navigation">
       <a class="site-tab ${activeTab === "home" ? "is-active" : ""}" href="/">Home</a>
+      <a class="site-tab ${activeTab === "following" ? "is-active" : ""}" href="/following">Following</a>
+      <a class="site-tab ${activeTab === "boards" ? "is-active" : ""}" href="/boards">Boards</a>
+      <a class="site-tab ${activeTab === "categories" ? "is-active" : ""}" href="/categories">Categories</a>
       <form class="site-search" method="get" action="/" role="search">
         <label class="sr-only" for="site-search-input">Search posts</label>
         <input id="site-search-input" name="q" value="${escapeHtml(query)}" placeholder="Search posts" maxlength="100">
         <button type="submit">Search</button>
       </form>
       ${accountLink}
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark mode" title="Switch theme"><span aria-hidden="true">◐</span></button>
     </nav>
   </header>
   <main>${body}</main>
-  <footer class="site-footer">Built zero-dependency for the Zero Dependency Hackathon.</footer>
+  <footer class="site-footer">Built zero-dependency for the Zero Dependency Hackathon by Arav Goel and Moksh Kardam.</footer>
+  <script src="/theme.js"></script>
+  <script src="/social.js"></script>
 </body>
 </html>`;
 }
@@ -51,8 +57,8 @@ function pageLink(page, query, label, current = false) {
   return `<a class="page-link${current ? " is-current" : ""}" href="/?${params}">${label}</a>`;
 }
 
-export function renderHome({ posts, user = null, query = "", page = 1, totalPages = 1, total = 0 }) {
-  const items = posts.map((post) => {
+function renderPostCards(posts) {
+  return posts.map((post) => {
     const cover = imageVariantPaths(post.cover_image);
     const coverHtml = cover
       ? `<img class="post-thumb" src="${cover.thumb}" alt="">`
@@ -63,10 +69,15 @@ export function renderHome({ posts, user = null, query = "", page = 1, totalPage
       <div class="post-card-copy">
         <h2><a href="/post/${encodeURIComponent(post.slug)}">${escapeHtml(post.title)}</a></h2>
         <p class="post-excerpt">${escapeHtml(excerpt(post.markdown))}</p>
-        <p class="post-meta"><span>By @${escapeHtml(post.author_username || "unknown")}</span><span aria-hidden="true">·</span><time datetime="${post.created_at}">${escapeHtml(post.created_at)}</time><span aria-hidden="true">·</span>${readingTime(post.markdown)} min read</p>
+        <p class="post-meta"><a href="/@${encodeURIComponent(post.author_username || "unknown")}">By @${escapeHtml(post.author_username || "unknown")}</a><span aria-hidden="true">·</span><time datetime="${post.created_at}">${escapeHtml(post.created_at)}</time><span aria-hidden="true">·</span>${readingTime(post.markdown)} min read<span aria-hidden="true">·</span>♥ ${post.like_count || 0}</p>
+        ${post.category_name ? `<p class="post-tags"><a href="/categories/${encodeURIComponent(post.category_slug)}">${escapeHtml(post.category_name)}</a>${post.board_name ? ` <a href="/boards/${encodeURIComponent(post.board_slug)}">b/${escapeHtml(post.board_name)}</a>` : ""}</p>` : ""}
       </div>
     </article>`;
-  }).join("") || `<p class="empty">${query ? `No published posts match “${escapeHtml(query)}”.` : "No posts yet."}</p>`;
+  }).join("");
+}
+
+export function renderHome({ posts, user = null, query = "", page = 1, totalPages = 1, total = 0 }) {
+  const items = renderPostCards(posts) || `<p class="empty">${query ? `No published posts match “${escapeHtml(query)}”.` : "No posts yet."}</p>`;
 
   const heading = query ? `Search results for “${escapeHtml(query)}”` : "Latest posts";
   const pagination = totalPages > 1 ? `
@@ -103,8 +114,12 @@ export function renderPost(post, comments, user = null, csrfToken = null) {
     <article class="post">
       ${coverHtml}
       <h1>${escapeHtml(post.title)}</h1>
-      <p class="post-byline">By <strong>@${escapeHtml(post.author_username || "unknown")}</strong> <span aria-hidden="true">·</span> <time datetime="${post.created_at}">${escapeHtml(post.created_at)}</time> <span aria-hidden="true">·</span> ${readingTime(post.markdown)} min read</p>
+      <p class="post-byline">By <strong><a href="/@${encodeURIComponent(post.author_username || "unknown")}">@${escapeHtml(post.author_username || "unknown")}</a></strong> <span aria-hidden="true">·</span> <time datetime="${post.created_at}">${escapeHtml(post.created_at)}</time> <span aria-hidden="true">·</span> ${readingTime(post.markdown)} min read</p>
       <div class="post-body">${renderMarkdown(post.markdown)}</div>
+      <div class="post-social-actions">
+        ${user ? `<form method="post" action="/post/${encodeURIComponent(post.slug)}/like"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><button class="social-action ${post.viewer_liked ? "is-active" : ""}">${post.viewer_liked ? "♥ Liked" : "♡ Like"} <span>${post.like_count || 0}</span></button></form>` : `<a class="social-action" href="/login">♡ Like ${post.like_count || 0}</a>`}
+        <button class="social-action" type="button" data-share-url="${escapeHtml(`/post/${post.slug}`)}">↗ Share</button>
+      </div>
     </article>
     <section class="comments">
       <h2>Comments</h2>
@@ -171,6 +186,47 @@ export function renderDashboard(posts, user, csrfToken) {
   return layout({ title: "My posts — mini-press", body: accountBody, head: ACCOUNT_HEAD, user, csrfToken, activeTab: "account" });
 }
 
+export function renderFollowing({ posts, user, csrfToken, heading = "Following", description = "The latest writing from people you follow.", activeTab = "following" }) {
+  const empty = `<p class="empty">No posts here yet. Follow people from their profiles to build your feed.</p>`;
+  const body = `<section class="feed-heading"><div><p class="eyebrow">Your feed</p><h1>${escapeHtml(heading)}</h1><p class="feed-description">${escapeHtml(description)}</p></div></section><div class="post-list">${renderPostCards(posts) || empty}</div>`;
+  return layout({ title: `${heading} — mini-press`, body, user, csrfToken, activeTab });
+}
+
+function badgeFor(score) {
+  if (score >= 25) return "Gold contributor";
+  if (score >= 10) return "Rising voice";
+  if (score >= 1) return "Community member";
+  return "New voice";
+}
+
+export function renderProfile(profile, posts, user, csrfToken, isFollowing, vote) {
+  const ownProfile = user?.id === profile.id;
+  const actions = ownProfile ? `<a class="button" href="/account">Manage account</a>` : user ? `
+    <form method="post" action="/@${encodeURIComponent(profile.username)}/follow"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><button class="button">${isFollowing ? "Following" : "Follow"}</button></form>
+    <form method="post" action="/@${encodeURIComponent(profile.username)}/vote"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><button class="vote-button ${vote === 1 ? "is-active" : ""}" name="value" value="1">▲</button><button class="vote-button ${vote === -1 ? "is-active" : ""}" name="value" value="-1">▼</button></form>` : `<a class="button" href="/login">Log in to follow</a>`;
+  const body = `<section class="profile-hero"><div><p class="eyebrow">${badgeFor(profile.score)}</p><h1>@${escapeHtml(profile.username)}</h1><p>Joined ${escapeHtml(profile.created_at)}</p></div><div class="profile-stats"><span><strong>${profile.follower_count}</strong> followers</span><span><strong>${profile.following_count}</strong> following</span><span><strong>${profile.score}</strong> score</span><span><strong>${profile.post_count}</strong> posts</span></div><div class="profile-actions">${actions}</div></section><section class="feed-heading"><h2>Posts by @${escapeHtml(profile.username)}</h2></section><div class="post-list">${renderPostCards(posts) || `<p class="empty">No published posts yet.</p>`}</div>`;
+  return layout({ title: `@${profile.username} — mini-press`, body, user, csrfToken });
+}
+
+export function renderCategories(categories, user, csrfToken) {
+  const cards = categories.map((category) => `<a class="category-card" href="/categories/${encodeURIComponent(category.slug)}"><h2>${escapeHtml(category.name)}</h2><p>${escapeHtml(category.description)}</p><span>${category.post_count} ${category.post_count === 1 ? "post" : "posts"}</span></a>`).join("");
+  const body = `<section class="feed-heading"><div><p class="eyebrow">Discover</p><h1>Categories</h1><p class="feed-description">Find writing by topic.</p></div></section><div class="category-grid">${cards}</div>`;
+  return layout({ title: "Categories — mini-press", body, user, csrfToken, activeTab: "categories" });
+}
+
+export function renderBoards(boards, user, csrfToken) {
+  const create = user ? `<details class="board-create"><summary>Create a board</summary><form method="post" action="/boards"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><label>Name<input name="name" maxlength="60" required></label><label>Description<textarea name="description" maxlength="300" rows="3"></textarea></label><button>Create board</button></form></details>` : `<a class="button" href="/login">Log in to create a board</a>`;
+  const cards = boards.map((board) => `<a class="board-card" href="/boards/${encodeURIComponent(board.slug)}"><p class="eyebrow">b/${escapeHtml(board.name)}</p><h2>${escapeHtml(board.name)}</h2><p>${escapeHtml(board.description || "A community board.")}</p><span>${board.member_count} members · ${board.post_count} posts · by @${escapeHtml(board.creator_username)}</span></a>`).join("") || `<p class="empty">No boards yet.</p>`;
+  const body = `<section class="feed-heading"><div><p class="eyebrow">Communities</p><h1>Boards</h1><p class="feed-description">Join focused spaces for shared interests.</p></div>${create}</section><div class="board-grid">${cards}</div>`;
+  return layout({ title: "Boards — mini-press", body, user, csrfToken, activeTab: "boards" });
+}
+
+export function renderBoard(board, posts, user, csrfToken, joined) {
+  const membership = user ? `<form method="post" action="/boards/${encodeURIComponent(board.slug)}/membership"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><button class="button">${joined ? "Joined" : "Join board"}</button></form>` : `<a class="button" href="/login">Log in to join</a>`;
+  const body = `<section class="profile-hero"><div><p class="eyebrow">b/${escapeHtml(board.name)}</p><h1>${escapeHtml(board.name)}</h1><p>${escapeHtml(board.description || "A community board.")}</p></div><div class="profile-stats"><span><strong>${board.member_count}</strong> members</span><span>Created by <strong>@${escapeHtml(board.creator_username)}</strong></span></div><div class="profile-actions">${membership}</div></section><section class="feed-heading"><h2>Board posts</h2></section><div class="post-list">${renderPostCards(posts) || `<p class="empty">No published posts in this board yet.</p>`}</div>`;
+  return layout({ title: `${board.name} — mini-press`, body, user, csrfToken, activeTab: "boards" });
+}
+
 export function renderAdminUsers(users, user, csrfToken) {
   const rows = users.map((account) => `
     <tr>
@@ -191,7 +247,7 @@ export function renderAdminUsers(users, user, csrfToken) {
 // markdown is sent to /account/preview-ws and the server renders it with the
 // exact same renderMarkdown() the public site uses, so the preview is never
 // out of sync with what actually gets published.
-export function renderEditor(post, csrfToken, user) {
+export function renderEditor(post, csrfToken, user, categories = [], boards = []) {
   const isNew = !post.id;
   const action = isNew ? "/account/posts" : `/account/posts/${post.id}`;
   const cover = imageVariantPaths(post.cover_image);
@@ -205,6 +261,8 @@ export function renderEditor(post, csrfToken, user) {
         <label>Title<br><input name="title" id="title" value="${escapeHtml(post.title || "")}" required></label>
         <label>Cover image<br><input type="file" name="cover" accept="image/*"></label>
         ${coverPreview}
+        <label>Category<select name="category_id"><option value="">No category</option>${categories.map((category) => `<option value="${category.id}" ${post.category_id === category.id ? "selected" : ""}>${escapeHtml(category.name)}</option>`).join("")}</select></label>
+        <label>Board<select name="board_id"><option value="">No board</option>${boards.map((board) => `<option value="${board.id}" ${post.board_id === board.id ? "selected" : ""}>b/${escapeHtml(board.name)}</option>`).join("")}</select></label>
         <label>Markdown<br>
           <textarea name="markdown" id="markdown" rows="20">${escapeHtml(post.markdown || "")}</textarea>
         </label>
