@@ -1,0 +1,56 @@
+:root {
+  --ink: #1a1a1a;
+  --paper: #fdfdfb;
+  --accent: #b04a2f;
+  --muted: #6b6b6b;
+  --line: #e4e0d8;
+  font-family: ui-serif, Georgia, "Times New Roman", serif;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  line-height: 1.6;
+}
+.site-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 2rem;
+  border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: bold; font-size: 1.3rem; color: var(--ink); text-decoration: none; }
+.feed-link { color: var(--accent); text-decoration: none; font-family: ui-monospace, monospace; }
+main { max-width: 720px; margin: 0 auto; padding: 2rem; }
+.site-footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 2rem; }
+
+.post-list { display: flex; flex-direction: column; gap: 2rem; }
+.post-card h2 { margin-bottom: 0.25rem; }
+.post-card h2 a { color: var(--ink); text-decoration: none; }
+.post-card h2 a:hover { color: var(--accent); }
+.post-thumb { width: 100%; max-height: 260px; object-fit: cover; border-radius: 4px; margin-bottom: 0.75rem; }
+.post-excerpt { color: #333; }
+.post-list time, .post time { color: var(--muted); font-size: 0.85rem; }
+
+.post-cover { width: 100%; border-radius: 6px; margin-bottom: 1rem; }
+.post-body { margin-top: 1rem; }
+.post-body pre { background: #f2efe9; padding: 1rem; overflow-x: auto; border-radius: 4px; }
+.post-body code { background: #f2efe9; padding: 0.1rem 0.3rem; border-radius: 3px; }
+.post-body blockquote { border-left: 3px solid var(--accent); margin: 1rem 0; padding-left: 1rem; color: #444; }
+
+.comments { margin-top: 3rem; border-top: 1px solid var(--line); padding-top: 1.5rem; }
+.comment-list { list-style: none; padding: 0; }
+.comment { border-bottom: 1px solid var(--line); padding: 0.75rem 0; }
+.comment time { font-size: 0.8rem; color: var(--muted); margin-left: 0.5rem; }
+.comment-form { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1.5rem; max-width: 480px; }
+.comment-form textarea, .comment-form input, .login-form input {
+  font: inherit; padding: 0.5rem; border: 1px solid var(--line); border-radius: 4px;
+}
+button {
+  font: inherit; background: var(--accent); color: white; border: none;
+  padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;
+}
+button:hover { opacity: 0.9; }
+.error { color: var(--accent); font-weight: bold; }
+.empty { color: var(--muted); font-style: italic; }

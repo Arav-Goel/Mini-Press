@@ -93,9 +93,18 @@ router.get("/uploads/:filename", async (req, { params }) => {
   return new Response(file);
 });
 
-router.get("/site.css", async () => new Response(Bun.file("./public/site.css")));
-router.get("/admin.css", async () => new Response(Bun.file("./public/admin.css")));
-router.get("/editor.js", async () => new Response(Bun.file("./public/editor.js")));
+// Serves a static file from ./public, returning a real 404 (not a thrown
+// ENOENT that becomes a 500) when it's missing — same existence check the
+// /uploads/:filename route already did correctly.
+async function staticFile(path) {
+  const file = Bun.file(path);
+  if (!(await file.exists())) return notFound();
+  return new Response(file);
+}
+
+router.get("/site.css", async () => staticFile("./public/site.css"));
+router.get("/admin.css", async () => staticFile("./public/admin.css"));
+router.get("/editor.js", async () => staticFile("./public/editor.js"));
 
 // ---------- admin auth ----------
 

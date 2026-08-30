@@ -1,0 +1,21 @@
+/* Loaded alongside site.css on /admin* pages for editor + dashboard layout. */
+.admin-bar { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+.admin-bar .button { background: var(--accent); color: white; padding: 0.5rem 1rem; border-radius: 4px; text-decoration: none; }
+.post-table { width: 100%; border-collapse: collapse; }
+.post-table th, .post-table td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--line); }
+
+.editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start; }
+.editor-form { display: flex; flex-direction: column; gap: 0.75rem; }
+.editor-form textarea { font-family: ui-monospace, monospace; font-size: 0.95rem; }
+.editor-form input[type="text"], .editor-form input:not([type="file"]) {
+  padding: 0.5rem; border: 1px solid var(--line); border-radius: 4px; font: inherit;
+}
+.editor-actions { display: flex; gap: 0.5rem; }
+button.danger { background: #7a1f1f; }
+.cover-preview { max-width: 100%; border-radius: 4px; }
+.preview-pane { border: 1px solid var(--line); border-radius: 6px; padding: 1rem; max-height: 80vh; overflow-y: auto; }
+
+@media (max-width: 800px) {
+  .editor-grid { grid-template-columns: 1fr; }
+  main { max-width: 100%; }
+}
