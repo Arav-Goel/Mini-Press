@@ -68,7 +68,7 @@ test("published posts can be paginated independently from drafts", () => {
 test("social relationships, reputation, categories, boards, and likes persist by identity", () => {
   const author = createUser("social-author");
   const reader = createUser("social-reader");
-  const category = db.getCategoryBySlug.get("technology");
+  const category = db.getCategoryBySlug.get("question");
   const boardId = Number(db.insertBoard.run("test-board", "Test board", "A test community", author).lastInsertRowid);
   const postId = Number(db.insertPost.run(author, "social-post", "Social post", "body", 1, category.id, boardId).lastInsertRowid);
 
@@ -81,7 +81,7 @@ test("social relationships, reputation, categories, boards, and likes persist by
   expect(profile.follower_count).toBe(1);
   expect(profile.score).toBe(1);
   expect(db.listFollowingPosts.all(reader, 10)[0].id).toBe(postId);
-  expect(db.listCategoryPosts.all("technology").some((post) => post.id === postId)).toBe(true);
+  expect(db.listCategoryPosts.all("question").some((post) => post.id === postId)).toBe(true);
   expect(db.listBoardPosts.all("test-board")[0].like_count).toBe(1);
   expect(db.getBoardMembership.get(boardId, reader)).toBeTruthy();
 });

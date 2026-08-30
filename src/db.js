@@ -137,10 +137,15 @@ db.exec("CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_i
 
 const seedCategory = db.prepare(`INSERT OR IGNORE INTO categories (slug, name, description) VALUES (?, ?, ?)`);
 for (const [slug, name, description] of [
-  ["general", "General", "Ideas, updates, and conversations."],
-  ["technology", "Technology", "Tools, software, and the future."],
-  ["design", "Design", "Visual craft and creative process."],
-  ["culture", "Culture", "Books, media, and shared interests."],
+  ["question", "Question?", "Ask the community and find useful answers."],
+  ["discussion", "Discussion", "Start a thoughtful conversation."],
+  ["reflection", "Reflection", "Share ideas, lessons, and perspectives."],
+  ["guide", "Guide", "Practical how-tos and explainers."],
+  ["showcase", "Showcase", "Present work worth seeing."],
+  ["review", "Review", "Consider and evaluate something closely."],
+  ["hot-take", "Hot Take", "A concise, opinionated point of view."],
+  ["announcements", "Announcements", "News and important updates."],
+  ["others", "Others", "Everything that does not fit elsewhere."],
 ]) seedCategory.run(slug, name, description);
 
 // --- users ---
