@@ -4,7 +4,7 @@ import { buildRssFeed } from "../src/rss.js";
 const basePost = {
   slug: "hello-world",
   title: "Hello, World & <Friends>",
-  markdown: "Some **content** here.",
+  body_markdown: "Some **content** here.",
   created_at: "2026-08-29 12:00:00",
 };
 

@@ -12,17 +12,16 @@ beforeAll(() => {
 const { hashPassword, verifyPassword, createSessionCookie, verifySessionCookie, csrfTokenFor, verifyCsrf } =
   await import("../src/auth.js");
 
-test("hashPassword produces a distinct salt each call", () => {
-  const a = hashPassword("correct horse battery staple");
-  const b = hashPassword("correct horse battery staple");
-  expect(a.salt).not.toBe(b.salt);
-  expect(a.hash).not.toBe(b.hash); // different salt -> different hash even for same password
+test("hashPassword produces distinct Bun.password hashes", async () => {
+  const a = await hashPassword("correct horse battery staple");
+  const b = await hashPassword("correct horse battery staple");
+  expect(a).not.toBe(b);
 });
 
-test("verifyPassword accepts the correct password and rejects a wrong one", () => {
-  const { hash, salt } = hashPassword("hunter22");
-  expect(verifyPassword("hunter22", hash, salt)).toBe(true);
-  expect(verifyPassword("hunter23", hash, salt)).toBe(false);
+test("verifyPassword accepts the correct password and rejects a wrong one", async () => {
+  const hash = await hashPassword("hunter22");
+  expect(await verifyPassword("hunter22", hash)).toBe(true);
+  expect(await verifyPassword("hunter23", hash)).toBe(false);
 });
 
 test("session cookie round-trips a valid userId", () => {

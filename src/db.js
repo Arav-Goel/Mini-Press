@@ -21,8 +21,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     username      TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,   -- hex scrypt output
-    salt          TEXT NOT NULL,   -- hex, unique per user
+    password_hash TEXT NOT NULL,   -- Bun.password encoded hash; never plaintext
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -31,7 +30,7 @@ db.exec(`
     user_id      INTEGER REFERENCES users(id),
     slug         TEXT UNIQUE NOT NULL,
     title        TEXT NOT NULL,
-    markdown     TEXT NOT NULL DEFAULT '',
+    body_markdown TEXT NOT NULL DEFAULT '',
     published    INTEGER NOT NULL DEFAULT 0,
     cover_image  TEXT,             -- filename stem, sizes derived from it
     created_at   TEXT NOT NULL DEFAULT (datetime('now')),
@@ -59,6 +58,19 @@ function hasColumn(table, column) {
   return db.query(`PRAGMA table_info(${table})`).all().some((entry) => entry.name === column);
 }
 
+// This is intentionally a breaking password migration. Existing scrypt
+// values remain in password_hash for audit/recovery, but cannot be verified
+// by Bun.password; recreate or reset those accounts from the database backup.
+if (hasColumn("users", "salt")) {
+  db.exec("ALTER TABLE users DROP COLUMN salt");
+}
+
+// Existing databases called this column `markdown`. Rename it in place so
+// posts and their content survive the schema upgrade.
+if (!hasColumn("posts", "body_markdown") && hasColumn("posts", "markdown")) {
+  db.exec("ALTER TABLE posts RENAME COLUMN markdown TO body_markdown");
+}
+
 if (!hasColumn("posts", "user_id")) {
   db.exec("ALTER TABLE posts ADD COLUMN user_id INTEGER REFERENCES users(id)");
 }
@@ -71,7 +83,7 @@ db.exec("CREATE INDEX IF NOT EXISTS idx_comments_user ON comments(user_id)");
 
 // --- users ---
 export const insertUser = db.prepare(
-  `INSERT INTO users (username, password_hash, salt) VALUES (?, ?, ?)`
+  `INSERT INTO users (username, password_hash) VALUES (?, ?)`
 );
 export const getUserByUsername = db.prepare(
   `SELECT * FROM users WHERE username = ?`
@@ -81,10 +93,10 @@ export const countUsers = db.prepare(`SELECT COUNT(*) AS n FROM users`);
 
 // --- posts ---
 export const insertPost = db.prepare(
-  `INSERT INTO posts (user_id, slug, title, markdown, published) VALUES (?, ?, ?, ?, ?)`
+  `INSERT INTO posts (user_id, slug, title, body_markdown, published) VALUES (?, ?, ?, ?, ?)`
 );
 export const updatePost = db.prepare(`
-  UPDATE posts SET title = ?, markdown = ?, updated_at = datetime('now')
+  UPDATE posts SET title = ?, body_markdown = ?, updated_at = datetime('now')
   WHERE id = ? AND user_id = ?
 `);
 export const setPostPublished = db.prepare(

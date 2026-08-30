@@ -29,7 +29,7 @@ Run the tests: `make test` (or `bun test`).
 
 ## What it actually does
 
-- **Accounts** — anyone can sign up and log in; passwords are hashed with `scrypt`, and sessions are
+- **Accounts** — anyone can sign up and log in; passwords are hashed with Bun's built-in `Bun.password`, and sessions are
   a signed cookie (no session database table needed).
 - **Write a post** — every post belongs to its author, and Markdown is rendered live in a side panel
   as you type, via a WebSocket round-trip to the server.
@@ -42,6 +42,10 @@ Run the tests: `make test` (or `bun test`).
   survives restarts.
 
 ## What it deliberately doesn't do (be honest about limits)
+
+- **This branch has a breaking password migration.** Existing scrypt-hashed
+  accounts cannot log in after moving to `Bun.password`; recreate or reset
+  those accounts from the SQLite backup made before the migration.
 
 - **No roles or moderation tools.** Every account can create its own posts;
   there is no privileged administrator role.
@@ -98,9 +102,9 @@ survived. Documented, not hidden.
   content, comment author/body) is HTML-escaped before rendering. The
   markdown renderer escapes first, then applies formatting — raw HTML in a
   post body or comment can never execute as HTML.
-- **Password cracking if the DB leaks** — passwords are hashed with
-  `scrypt` (memory-hard, deliberately slow), never stored in plaintext or
-  behind a fast hash like bare SHA-256.
+- **Password cracking if the DB leaks** — passwords are hashed with Bun's
+  built-in password API, never stored in plaintext or behind a fast hash
+  like bare SHA-256.
 - **Cookie forgery/tampering** — session cookies are HMAC-SHA256 signed
   with a server-only secret generated on first run
   (`data/.session-secret`, `chmod 600`). A forged or edited cookie fails

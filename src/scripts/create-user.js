@@ -23,6 +23,6 @@ if (getUserByUsername.get(username)) {
   process.exit(1);
 }
 
-const { hash, salt } = hashPassword(password);
-insertUser.run(username, hash, salt);
+const hash = await hashPassword(password);
+insertUser.run(username, hash);
 console.log(`Created user "${username}". Log in at /login.`);

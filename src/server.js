@@ -131,7 +131,7 @@ router.post("/login", async (req) => {
   const password = String(form.get("password") || "");
 
   const user = db.getUserByUsername.get(username);
-  const ok = user && auth.verifyPassword(password, user.password_hash, user.salt);
+  const ok = user && await auth.verifyPassword(password, user.password_hash);
   if (!ok) return html(renderLogin({ error: "Invalid username or password." }), { status: 401 });
 
   return redirect("/account", { "set-cookie": auth.createSessionCookie(user.id) });
@@ -155,8 +155,8 @@ router.post("/signup", async (req) => {
   if (db.getUserByUsername.get(username)) {
     return html(renderSignup({ error: "That username is already taken." }), { status: 409 });
   }
-  const { hash, salt } = auth.hashPassword(password);
-  const result = db.insertUser.run(username, hash, salt);
+  const hash = await auth.hashPassword(password);
+  const result = db.insertUser.run(username, hash);
   return redirect("/account", { "set-cookie": auth.createSessionCookie(Number(result.lastInsertRowid)) });
 });
 

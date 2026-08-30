@@ -41,7 +41,7 @@ export function renderHome(posts, user = null) {
     <article class="post-card">
       ${coverHtml}
       <h2><a href="/post/${encodeURIComponent(post.slug)}">${escapeHtml(post.title)}</a></h2>
-      <p class="post-excerpt">${escapeHtml(excerpt(post.markdown))}</p>
+      <p class="post-excerpt">${escapeHtml(excerpt(post.body_markdown))}</p>
       <time datetime="${post.created_at}">${escapeHtml(post.created_at)}</time>
     </article>`;
   }).join("") || `<p class="empty">No posts yet.</p>`;
@@ -73,7 +73,7 @@ export function renderPost(post, comments, user = null, csrfToken = null) {
       ${coverHtml}
       <h1>${escapeHtml(post.title)}</h1>
       <time datetime="${post.created_at}">${escapeHtml(post.created_at)}</time>
-      <div class="post-body">${renderMarkdown(post.markdown)}</div>
+      <div class="post-body">${renderMarkdown(post.body_markdown)}</div>
     </article>
     <section class="comments">
       <h2>Comments</h2>
@@ -153,7 +153,7 @@ export function renderEditor(post, csrfToken, user) {
         <label>Cover image<br><input type="file" name="cover" accept="image/*"></label>
         ${coverPreview}
         <label>Markdown<br>
-          <textarea name="markdown" id="markdown" rows="20">${escapeHtml(post.markdown || "")}</textarea>
+          <textarea name="markdown" id="markdown" rows="20">${escapeHtml(post.body_markdown || "")}</textarea>
         </label>
         <div class="editor-actions">
           <button type="submit">Save</button>

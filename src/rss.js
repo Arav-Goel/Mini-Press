@@ -19,14 +19,14 @@ export function buildRssFeed({ siteTitle, siteUrl, siteDescription, posts }) {
     .map((post) => {
       const link = `${siteUrl}/post/${post.slug}`;
       const pubDate = new Date(post.created_at + "Z").toUTCString();
-      const html = renderMarkdown(post.markdown);
+      const html = renderMarkdown(post.body_markdown);
       return `
     <item>
       <title>${xmlEscape(post.title)}</title>
       <link>${xmlEscape(link)}</link>
       <guid isPermaLink="true">${xmlEscape(link)}</guid>
       <pubDate>${pubDate}</pubDate>
-      <description>${xmlEscape(excerpt(post.markdown))}</description>
+      <description>${xmlEscape(excerpt(post.body_markdown))}</description>
       <content:encoded><![CDATA[${html}]]></content:encoded>
     </item>`;
     })

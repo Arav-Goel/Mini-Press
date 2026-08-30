@@ -2,15 +2,15 @@
 // (passport, bcrypt, jsonwebtoken...) replaced with node:crypto, composed
 // carefully, never inventing our own primitives.
 //
-// Passwords: scryptSync (memory-hard, purpose-built for password storage —
-//   this is the stdlib's actual recommended password-hashing function,
-//   not a bare SHA-256).
+// Passwords: Bun.password hashes and verifies credentials using Bun's
+// built-in password API; no plaintext password reaches SQLite.
 // Sessions: stateless, HMAC-SHA256-signed cookies. No session table, no
 //   server-side session store to go stale — the cookie IS the session,
 //   and it can't be forged without the server secret.
 //
 // Threat model (see README "Security notes" for the full version):
-//   - Protects against: password DB theft (scrypt is slow to brute-force),
+//   - Protects against: password DB theft (Bun.password uses a slow password
+//     hashing algorithm),
 //     cookie tampering/forgery (HMAC), timing attacks on comparisons
 //     (timingSafeEqual throughout).
 //   - Does NOT protect against: XSS stealing a valid cookie (mitigate with
@@ -18,7 +18,7 @@
 //     session secret file, or brute-forcing a weak account password (no rate
 //     limiting in this MVP — documented gap, see README).
 
-import { scryptSync, randomBytes, createHmac, timingSafeEqual } from "node:crypto";
+import { randomBytes, createHmac, timingSafeEqual } from "node:crypto";
 import { readFileSync, writeFileSync, existsSync, chmodSync } from "node:fs";
 
 const SECRET_PATH = `${process.env.MINIPRESS_DATA_DIR || "./data"}/.session-secret`;
@@ -36,17 +36,18 @@ const SECRET = loadOrCreateSecret();
 
 // --- password hashing ---
 
-export function hashPassword(password) {
-  const salt = randomBytes(16).toString("hex");
-  const hash = scryptSync(password, salt, 64).toString("hex");
-  return { hash, salt };
+export async function hashPassword(password) {
+  return Bun.password.hash(password);
 }
 
-export function verifyPassword(password, hash, salt) {
-  const candidate = scryptSync(password, salt, 64);
-  const stored = Buffer.from(hash, "hex");
-  if (candidate.length !== stored.length) return false;
-  return timingSafeEqual(candidate, stored);
+export async function verifyPassword(password, hash) {
+  try {
+    return await Bun.password.verify(password, hash);
+  } catch {
+    // Legacy scrypt hashes cannot be verified by Bun.password after the
+    // deliberate breaking migration; treat them as invalid credentials.
+    return false;
+  }
 }
 
 // --- base64url helpers (session payload encoding) ---
