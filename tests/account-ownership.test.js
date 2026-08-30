@@ -84,4 +84,35 @@ test("social relationships, reputation, categories, boards, and likes persist by
   expect(db.listCategoryPosts.all("question").some((post) => post.id === postId)).toBe(true);
   expect(db.listBoardPosts.all("test-board")[0].like_count).toBe(1);
   expect(db.getBoardMembership.get(boardId, reader)).toBeTruthy();
+  expect(db.listFollowersForUser.all(author)[0].username).toBe("social-reader");
+  expect(db.listFollowingForUser.all(reader)[0].username).toBe("social-author");
+});
+
+test("events record attendance and respect their capacity", () => {
+  const host = createUser("event-host");
+  const firstGuest = createUser("first-guest");
+  const secondGuest = createUser("second-guest");
+  const eventId = Number(db.insertEvent.run(
+    "test-event", host, "Test event", "A limited capacity event", "2026-12-01", "18:30", "Online", "Everyone", 1
+  ).lastInsertRowid);
+
+  expect(db.joinEventIfAvailable(eventId, firstGuest)).toBe(true);
+  expect(db.joinEventIfAvailable(eventId, secondGuest)).toBe(false);
+  expect(db.getEventBySlug.get("test-event").attendee_count).toBe(1);
+  expect(db.listEventAttendees.all(eventId)[0].username).toBe("first-guest");
+  db.leaveEvent.run(eventId, firstGuest);
+  expect(db.joinEventIfAvailable(eventId, secondGuest)).toBe(true);
+  expect(db.deleteEventForCreator.run(eventId, firstGuest).changes).toBe(0);
+  db.deleteEventForCreator.run(eventId, host);
+  expect(db.getEventBySlug.get("test-event")).toBeNull();
+});
+
+test("deleting a board creator safely detaches another member’s board post", () => {
+  const creator = createUser("board-creator-to-delete");
+  const writer = createUser("board-member-writer");
+  const boardId = Number(db.insertBoard.run("creator-board", "Creator board", "Will be removed", creator).lastInsertRowid);
+  const postId = Number(db.insertPost.run(writer, "board-member-post", "Member post", "body", 1, null, boardId).lastInsertRowid);
+
+  expect(db.deleteUserAndContent(creator).changes).toBe(1);
+  expect(db.getPostById.get(postId).board_id).toBeNull();
 });

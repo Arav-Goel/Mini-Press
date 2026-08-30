@@ -15,7 +15,8 @@ import { processUpload, verifyImageSupport } from "./images.js";
 import { buildRssFeed } from "./rss.js";
 import {
   renderHome, renderPost, renderLogin, renderSignup, renderDashboard, renderEditor,
-  renderAdminUsers, renderProfile, renderFollowing, renderCategories, renderBoards, renderBoard,
+  renderAdminUsers, renderProfile, renderConnections, renderFollowing, renderCategories, renderBoards, renderBoard,
+  renderEvents, renderEvent, renderAdminContent,
 } from "./render.js";
 
 const PORT = Number(process.env.PORT || 3000);
@@ -126,7 +127,10 @@ router.get("/categories/:slug", async (req, { params }) => {
 
 router.get("/boards", async (req) => {
   const user = currentUser(req);
-  return html(renderBoards(db.listBoards.all(), user, user ? auth.csrfTokenFor(req.headers.get("cookie")) : null));
+  const query = (new URL(req.url).searchParams.get("q") || "").trim().slice(0, 100);
+  const pattern = likePattern(query);
+  const boards = query ? db.searchBoards.all(pattern, pattern) : db.listBoards.all();
+  return html(renderBoards(boards, user, user ? auth.csrfTokenFor(req.headers.get("cookie")) : null, query));
 });
 router.post("/boards", async (req) => {
   const user = currentUser(req);
@@ -163,6 +167,65 @@ router.post("/boards/:slug/membership", async (req, { params }) => {
   return redirect(`/boards/${params.slug}`);
 });
 
+router.get("/events", async (req) => {
+  const user = currentUser(req);
+  return html(renderEvents(db.listEvents.all(), user, user ? auth.csrfTokenFor(req.headers.get("cookie")) : null));
+});
+router.post("/events", async (req) => {
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
+  const form = await req.formData();
+  if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) return new Response("Invalid CSRF token", { status: 403 });
+  const title = String(form.get("title") || "").trim().slice(0, 120);
+  const description = String(form.get("description") || "").trim().slice(0, 3000);
+  const date = String(form.get("event_date") || "");
+  const time = String(form.get("event_time") || "");
+  const location = String(form.get("location") || "").trim().slice(0, 160);
+  const eligibility = String(form.get("eligibility") || "Everyone").trim().slice(0, 160);
+  const capacityInput = String(form.get("capacity") || "").trim();
+  const capacity = capacityInput ? Number(capacityInput) : null;
+  if (!title || !description || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time) || !location || (capacity !== null && (!Number.isSafeInteger(capacity) || capacity < 1))) return new Response("Please complete the required event details.", { status: 400 });
+  const slug = `${slugify(title)}-${Date.now()}`;
+  const result = db.insertEvent.run(slug, user.id, title, description, date, time, location, eligibility || "Everyone", capacity);
+  const eventId = Number(result.lastInsertRowid);
+  const image = form.get("image");
+  if (image && typeof image === "object" && image.size > 0) {
+    const stem = await processUpload(Buffer.from(await image.arrayBuffer()), `event-${eventId}`);
+    db.setEventImage.run(stem, eventId, user.id);
+  }
+  return redirect(`/events/${slug}`);
+});
+router.get("/events/:slug", async (req, { params }) => {
+  const event = db.getEventBySlug.get(params.slug);
+  if (!event) return notFound();
+  const user = currentUser(req);
+  const joined = user ? Boolean(db.getEventAttendance.get(event.id, user.id)) : false;
+  return html(renderEvent(event, user, user ? auth.csrfTokenFor(req.headers.get("cookie")) : null, joined, db.listEventAttendees.all(event.id)));
+});
+router.post("/events/:slug/attendance", async (req, { params }) => {
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
+  const event = db.getEventBySlug.get(params.slug);
+  if (!event) return notFound();
+  const form = await req.formData();
+  if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) return new Response("Invalid CSRF token", { status: 403 });
+  if (db.getEventAttendance.get(event.id, user.id)) db.leaveEvent.run(event.id, user.id);
+  else if (!db.joinEventIfAvailable(event.id, user.id)) return new Response("This event is full.", { status: 409 });
+  return redirect(`/events/${params.slug}`);
+});
+router.post("/events/:slug/delete", async (req, { params }) => {
+  const user = currentUser(req);
+  if (!user) return redirect("/login");
+  const event = db.getEventBySlug.get(params.slug);
+  if (!event) return notFound();
+  const form = await req.formData();
+  if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) return new Response("Invalid CSRF token", { status: 403 });
+  if (event.creator_id === user.id) db.deleteEventForCreator.run(event.id, user.id);
+  else if (user.is_admin) db.deleteEventForAdmin.run(event.id);
+  else return notFound();
+  return redirect("/events");
+});
+
 router.get("/@:username", async (req, { params }) => {
   const profile = db.getPublicUser.get(params.username);
   if (!profile) return notFound();
@@ -170,6 +233,16 @@ router.get("/@:username", async (req, { params }) => {
   const isFollowing = user ? Boolean(db.getFollow.get(user.id, profile.id)) : false;
   const vote = user ? db.getUserVote.get(user.id, profile.id)?.value ?? 0 : 0;
   return html(renderProfile(profile, db.listProfilePosts.all(params.username), user, user ? auth.csrfTokenFor(req.headers.get("cookie")) : null, isFollowing, vote));
+});
+router.get("/@:username/followers", async (req, { params }) => {
+  const profile = db.getPublicUser.get(params.username);
+  if (!profile) return notFound();
+  return html(renderConnections(profile, db.listFollowersForUser.all(profile.id), "followers", currentUser(req)));
+});
+router.get("/@:username/following", async (req, { params }) => {
+  const profile = db.getPublicUser.get(params.username);
+  if (!profile) return notFound();
+  return html(renderConnections(profile, db.listFollowingForUser.all(profile.id), "following", currentUser(req)));
 });
 router.post("/@:username/follow", async (req, { params }) => {
   const user = currentUser(req);
@@ -309,7 +382,7 @@ router.get("/account", async (req) => {
   const user = currentUser(req);
   if (!user) return redirect("/login");
   const token = auth.csrfTokenFor(req.headers.get("cookie"));
-  return html(renderDashboard(db.listPostsForUser.all(user.id), user, token));
+  return html(renderDashboard(db.listPostsForUser.all(user.id), user, token, db.getPublicUser.get(user.username)));
 });
 
 router.get("/account/admin", async (req) => {
@@ -330,6 +403,38 @@ router.post("/account/admin/users/:id/delete", async (req, { params }) => {
   if (!Number.isSafeInteger(targetId) || targetId === user.id) return new Response("Cannot delete this account", { status: 400 });
   db.deleteUserAndContent(targetId);
   return redirect("/account/admin");
+});
+
+router.get("/account/admin/content", async (req) => {
+  const user = requireAdmin(req);
+  if (!user) return notFound();
+  const csrfToken = auth.csrfTokenFor(req.headers.get("cookie"));
+  return html(renderAdminContent({ user, csrfToken, posts: db.listPostsForAdmin.all(), boards: db.listBoards.all(), categories: db.listCategories.all(), events: db.listEvents.all() }));
+});
+router.post("/account/admin/categories", async (req) => {
+  const user = requireAdmin(req);
+  if (!user) return notFound();
+  const form = await req.formData();
+  if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) return new Response("Invalid CSRF token", { status: 403 });
+  const name = String(form.get("name") || "").trim().slice(0, 60);
+  const description = String(form.get("description") || "").trim().slice(0, 300);
+  if (!name) return redirect("/account/admin/content");
+  try { db.insertCategory.run(slugify(name), name, description); } catch { /* A duplicate returns to the manager. */ }
+  return redirect("/account/admin/content");
+});
+router.post("/account/admin/:kind/:id/delete", async (req, { params }) => {
+  const user = requireAdmin(req);
+  if (!user) return notFound();
+  const form = await req.formData();
+  if (!auth.verifyCsrf(req.headers.get("cookie"), String(form.get("csrf") || ""))) return new Response("Invalid CSRF token", { status: 403 });
+  const id = Number(params.id);
+  if (!Number.isSafeInteger(id)) return notFound();
+  if (params.kind === "posts") db.deletePostForAdmin.run(id);
+  else if (params.kind === "boards") db.deleteBoardForAdmin(id);
+  else if (params.kind === "categories") db.deleteCategoryForAdmin(id);
+  else if (params.kind === "events") db.deleteEventForAdmin.run(id);
+  else return notFound();
+  return redirect("/account/admin/content");
 });
 
 router.get("/account/new", async (req) => {

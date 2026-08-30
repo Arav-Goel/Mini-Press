@@ -16,6 +16,14 @@
 .post-actions a, .text-danger { color: var(--accent); text-decoration: none; font: inherit; background: transparent; padding: 0; }
 .account-logout { margin-top: 1.5rem; }
 .role-label { display: inline-block; margin-left: 0.5rem; color: var(--accent); font-size: 0.75rem; font-weight: normal; }
+.admin-content-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.admin-content-grid > :last-child { grid-column: 1 / -1; }
+.admin-create-category form { display: grid; gap: 0.65rem; padding: 0 1rem 1rem; }
+.admin-create-category label { display: grid; gap: 0.25rem; }
+.admin-create-category input, .admin-create-category textarea { font: inherit; padding: 0.45rem; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 4px; }
+.admin-content-list { list-style: none; margin: 0; padding: 0; }
+.admin-content-list li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.65rem 1rem; border-top: 1px solid var(--line); }
+.admin-content-list small { color: var(--muted); }
 
 .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start; }
 .editor-form { display: flex; flex-direction: column; gap: 0.75rem; }
@@ -31,6 +39,8 @@ button.danger { background: #7a1f1f; }
 @media (max-width: 800px) {
   .account-hero { align-items: flex-start; flex-direction: column; }
   .account-panel { overflow-x: auto; }
+  .admin-content-grid { grid-template-columns: 1fr; }
+  .admin-content-grid > :last-child { grid-column: auto; }
   .editor-grid { grid-template-columns: 1fr; }
   main { max-width: 100%; }
 }

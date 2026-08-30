@@ -29,9 +29,10 @@ function layout({ title, body, head = "", user = null, csrfToken = null, activeT
       <a class="site-tab ${activeTab === "following" ? "is-active" : ""}" href="/following">Following</a>
       <a class="site-tab ${activeTab === "boards" ? "is-active" : ""}" href="/boards">Boards</a>
       <a class="site-tab ${activeTab === "categories" ? "is-active" : ""}" href="/categories">Categories</a>
+      <a class="site-tab ${activeTab === "events" ? "is-active" : ""}" href="/events">Events</a>
       <form class="site-search" method="get" action="/" role="search">
         <label class="sr-only" for="site-search-input">Search posts</label>
-        <input id="site-search-input" name="q" value="${escapeHtml(query)}" placeholder="Search posts" maxlength="100">
+        <span class="search-icon" aria-hidden="true">⌕</span><input id="site-search-input" name="q" value="${escapeHtml(query)}" placeholder="Search posts" maxlength="100" autocomplete="off">
         <button type="submit">Search</button>
       </form>
       ${accountLink}
@@ -162,7 +163,7 @@ export function renderSignup({ error } = {}) {
   return layout({ title: "Create account — mini-press", body, head: ACCOUNT_HEAD });
 }
 
-export function renderDashboard(posts, user, csrfToken) {
+export function renderDashboard(posts, user, csrfToken, profile = null) {
   const rows = posts.map((post) => `
     <tr>
       <td><a href="/account/posts/${post.id}/edit">${escapeHtml(post.title)}</a></td>
@@ -173,8 +174,8 @@ export function renderDashboard(posts, user, csrfToken) {
 
   const body = `
     <section class="account-hero">
-      <div><p class="eyebrow">Your space</p><h1>@${escapeHtml(user.username)}</h1><p>Manage your drafts and published writing in one place.</p></div>
-      <div class="account-hero-actions"><a class="button" href="/account/new">Write a post</a>${user.is_admin ? `<a class="button secondary-button" href="/account/admin">Manage users</a>` : ""}</div>
+      <div><p class="eyebrow">${profile ? badgeFor(profile.score) : "Your space"}</p><h1>@${escapeHtml(user.username)}</h1><p>Manage your drafts and published writing in one place.</p>${profile ? `<div class="profile-stats account-stats"><span><strong>${profile.follower_count}</strong> followers</span><span><strong>${profile.following_count}</strong> following</span><span><strong>${profile.score}</strong> popularity</span><span><strong>${profile.post_count}</strong> posts</span></div><a class="account-profile-link" href="/@${encodeURIComponent(user.username)}">View public profile</a>` : ""}</div>
+      <div class="account-hero-actions"><a class="button" href="/account/new">Write a post</a>${user.is_admin ? `<a class="button secondary-button" href="/account/admin">Manage users</a><a class="button secondary-button" href="/account/admin/content">Manage content</a>` : ""}</div>
     </section>
     <section class="account-panel">
       <div class="account-panel-heading"><h2>Your posts</h2><span>${posts.length} ${posts.length === 1 ? "post" : "posts"}</span></div>
@@ -204,8 +205,19 @@ export function renderProfile(profile, posts, user, csrfToken, isFollowing, vote
   const actions = ownProfile ? `<a class="button" href="/account">Manage account</a>` : user ? `
     <form method="post" action="/@${encodeURIComponent(profile.username)}/follow"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><button class="button">${isFollowing ? "Following" : "Follow"}</button></form>
     <form method="post" action="/@${encodeURIComponent(profile.username)}/vote"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><button class="vote-button ${vote === 1 ? "is-active" : ""}" name="value" value="1">▲</button><button class="vote-button ${vote === -1 ? "is-active" : ""}" name="value" value="-1">▼</button></form>` : `<a class="button" href="/login">Log in to follow</a>`;
-  const body = `<section class="profile-hero"><div><p class="eyebrow">${badgeFor(profile.score)}</p><h1>@${escapeHtml(profile.username)}</h1><p>Joined ${escapeHtml(profile.created_at)}</p></div><div class="profile-stats"><span><strong>${profile.follower_count}</strong> followers</span><span><strong>${profile.following_count}</strong> following</span><span><strong>${profile.score}</strong> score</span><span><strong>${profile.post_count}</strong> posts</span></div><div class="profile-actions">${actions}</div></section><section class="feed-heading"><h2>Posts by @${escapeHtml(profile.username)}</h2></section><div class="post-list">${renderPostCards(posts) || `<p class="empty">No published posts yet.</p>`}</div>`;
+  const body = `<section class="profile-hero"><div><p class="eyebrow">${badgeFor(profile.score)}</p><h1>@${escapeHtml(profile.username)}</h1><p>Joined ${escapeHtml(profile.created_at)}</p></div><div class="profile-stats"><a href="/@${encodeURIComponent(profile.username)}/followers"><strong>${profile.follower_count}</strong> followers</a><a href="/@${encodeURIComponent(profile.username)}/following"><strong>${profile.following_count}</strong> following</a><span><strong>${profile.score}</strong> score</span><span><strong>${profile.post_count}</strong> posts</span></div><div class="profile-actions">${actions}</div></section><section class="feed-heading"><h2>Posts by @${escapeHtml(profile.username)}</h2></section><div class="post-list">${renderPostCards(posts) || `<p class="empty">No published posts yet.</p>`}</div>`;
   return layout({ title: `@${profile.username} — mini-press`, body, user, csrfToken });
+}
+
+export function renderConnections(profile, people, kind, user = null) {
+  const isFollowers = kind === "followers";
+  const heading = isFollowers ? "Followers" : "Following";
+  const description = isFollowers
+    ? `People following @${profile.username}.`
+    : `People @${profile.username} follows.`;
+  const members = people.map((person) => `<a class="connection-card" href="/@${encodeURIComponent(person.username)}"><span class="connection-avatar" aria-hidden="true">${escapeHtml(person.username.slice(0, 1).toUpperCase())}</span><span><strong>@${escapeHtml(person.username)}</strong><small>${person.follower_count} followers · ${person.following_count} following · ${person.score} score</small></span><span class="connection-arrow" aria-hidden="true">→</span></a>`).join("") || `<p class="empty">${isFollowers ? "No followers yet." : "Not following anyone yet."}</p>`;
+  const body = `<section class="connection-heading"><a class="back-link" href="/@${encodeURIComponent(profile.username)}">← Back to @${escapeHtml(profile.username)}</a><p class="eyebrow">Community</p><h1>${heading}</h1><p>${escapeHtml(description)}</p><div class="connection-tabs"><a class="${isFollowers ? "is-active" : ""}" href="/@${encodeURIComponent(profile.username)}/followers">${profile.follower_count} followers</a><a class="${!isFollowers ? "is-active" : ""}" href="/@${encodeURIComponent(profile.username)}/following">${profile.following_count} following</a></div></section><div class="connection-list">${members}</div>`;
+  return layout({ title: `${heading} — @${profile.username} — mini-press`, body, user });
 }
 
 export function renderCategories(categories, user, csrfToken) {
@@ -214,10 +226,11 @@ export function renderCategories(categories, user, csrfToken) {
   return layout({ title: "Categories — mini-press", body, user, csrfToken, activeTab: "categories" });
 }
 
-export function renderBoards(boards, user, csrfToken) {
-  const create = user ? `<details class="board-create"><summary>Create a board</summary><form method="post" action="/boards"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><label>Name<input name="name" maxlength="60" required></label><label>Description<textarea name="description" maxlength="300" rows="3"></textarea></label><button>Create board</button></form></details>` : `<a class="button" href="/login">Log in to create a board</a>`;
+export function renderBoards(boards, user, csrfToken, query = "") {
+  const create = user ? `<details class="board-create"><summary>Create a board</summary><form method="post" action="/boards"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><label>Name<input name="name" maxlength="60" placeholder="e.g. Climate Futures" required></label><label>Description<textarea name="description" maxlength="300" rows="3" placeholder="What will people share here?"></textarea></label><button>Create board</button></form></details>` : `<a class="button" href="/login">Log in to create a board</a>`;
   const cards = boards.map((board) => `<a class="board-card" href="/boards/${encodeURIComponent(board.slug)}"><p class="eyebrow">b/${escapeHtml(board.name)}</p><h2>${escapeHtml(board.name)}</h2><p>${escapeHtml(board.description || "A community board.")}</p><span>${board.member_count} members · ${board.post_count} posts · by @${escapeHtml(board.creator_username)}</span></a>`).join("") || `<p class="empty">No boards yet.</p>`;
-  const body = `<section class="feed-heading"><div><p class="eyebrow">Communities</p><h1>Boards</h1><p class="feed-description">Join focused spaces for shared interests.</p></div>${create}</section><div class="board-grid">${cards}</div>`;
+  const search = `<form class="board-search" method="get" action="/boards" role="search"><label class="sr-only" for="board-search-input">Search boards</label><span class="search-icon" aria-hidden="true">⌕</span><input id="board-search-input" name="q" value="${escapeHtml(query)}" placeholder="Search board name or description" maxlength="100" autocomplete="off"><button>Search boards</button></form>`;
+  const body = `<section class="feed-heading"><div><p class="eyebrow">Communities</p><h1>Boards</h1><p class="feed-description">Join focused spaces for shared interests.</p></div>${create}</section>${search}${query ? `<p class="feed-summary">${boards.length} ${boards.length === 1 ? "board" : "boards"} found</p>` : ""}<div class="board-grid">${cards}</div>`;
   return layout({ title: "Boards — mini-press", body, user, csrfToken, activeTab: "boards" });
 }
 
@@ -225,6 +238,31 @@ export function renderBoard(board, posts, user, csrfToken, joined) {
   const membership = user ? `<form method="post" action="/boards/${encodeURIComponent(board.slug)}/membership"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><button class="button">${joined ? "Joined" : "Join board"}</button></form>` : `<a class="button" href="/login">Log in to join</a>`;
   const body = `<section class="profile-hero"><div><p class="eyebrow">b/${escapeHtml(board.name)}</p><h1>${escapeHtml(board.name)}</h1><p>${escapeHtml(board.description || "A community board.")}</p></div><div class="profile-stats"><span><strong>${board.member_count}</strong> members</span><span>Created by <strong>@${escapeHtml(board.creator_username)}</strong></span></div><div class="profile-actions">${membership}</div></section><section class="feed-heading"><h2>Board posts</h2></section><div class="post-list">${renderPostCards(posts) || `<p class="empty">No published posts in this board yet.</p>`}</div>`;
   return layout({ title: `${board.name} — mini-press`, body, user, csrfToken, activeTab: "boards" });
+}
+
+export function renderEvents(events, user, csrfToken) {
+  const create = user ? `<details class="event-create"><summary><span>Host an event</span><small>Set the details, capacity, and audience</small></summary><form method="post" action="/events" enctype="multipart/form-data"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><p class="event-form-intro">Create a clear listing so people know exactly what they are joining.</p><fieldset><legend>About the event</legend><label>Title<input name="title" maxlength="120" placeholder="e.g. Film club screening" required></label><label>Description<textarea name="description" rows="4" maxlength="3000" placeholder="What will happen?" required></textarea></label></fieldset><fieldset><legend>When and where</legend><div class="event-form-grid"><label>Date<input type="date" name="event_date" required></label><label>Time<input type="time" name="event_time" required></label></div><label>Location<input name="location" maxlength="160" placeholder="Online, venue, or city" required></label></fieldset><fieldset><legend>Attendance</legend><label>Who can apply?<input name="eligibility" maxlength="160" placeholder="Everyone" value="Everyone"></label><label>Capacity <small>(optional — leave empty for unlimited)</small><input type="number" name="capacity" min="1" placeholder="Unlimited"></label></fieldset><label class="event-image-input">Event image <small>(optional)</small><input type="file" name="image" accept="image/*"></label><button>Publish event</button></form></details>` : `<a class="button" href="/login">Log in to host an event</a>`;
+  const cards = events.map((event) => `<a class="event-card" href="/events/${encodeURIComponent(event.slug)}">${event.image_stem ? `<img src="${imageVariantPaths(event.image_stem).thumb}" alt="">` : `<div class="event-image-placeholder">Event</div>`}<div><p class="eyebrow">${escapeHtml(event.event_date)} · ${escapeHtml(event.event_time)}</p><h2>${escapeHtml(event.title)}</h2><p>${escapeHtml(event.description)}</p><span>${escapeHtml(event.location)} · ${event.attendee_count}${event.capacity ? `/${event.capacity}` : ""} attending · by @${escapeHtml(event.creator_username)}</span></div></a>`).join("") || `<p class="empty">No events scheduled yet.</p>`;
+  const body = `<section class="feed-heading"><div><p class="eyebrow">Sequential event timeline</p><h1>Events</h1><p class="feed-description">Find something to join, or bring people together.</p></div>${create}</section><div class="event-list">${cards}</div>`;
+  return layout({ title: "Events — mini-press", body, user, csrfToken, activeTab: "events" });
+}
+
+export function renderEvent(event, user, csrfToken, joined, attendees = []) {
+  const image = event.image_stem ? `<img class="event-cover" src="${imageVariantPaths(event.image_stem).large}" alt="">` : "";
+  const full = event.capacity && event.attendee_count >= event.capacity;
+  const remaining = event.capacity ? Math.max(0, event.capacity - event.attendee_count) : null;
+  const action = user ? `<form method="post" action="/events/${encodeURIComponent(event.slug)}/attendance"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><button class="button" ${full && !joined ? "disabled" : ""}>${joined ? "You’re attending" : full ? "Event full" : "Join event"}</button></form>` : `<a class="button" href="/login">Log in to join</a>`;
+  const attendeesHtml = attendees.length ? `<ul class="event-attendee-list">${attendees.map((attendee) => `<li><a href="/@${encodeURIComponent(attendee.username)}">@${escapeHtml(attendee.username)}</a></li>`).join("")}</ul>` : `<p class="empty">No one has joined yet.</p>`;
+  const deletion = user && (user.id === event.creator_id || user.is_admin) ? `<form method="post" action="/events/${encodeURIComponent(event.slug)}/delete" class="event-delete"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><button class="text-danger" onclick="return confirm('Delete this event?')">Delete event</button></form>` : "";
+  const body = `<article class="event-detail">${image}<p class="eyebrow">${escapeHtml(event.event_date)} · ${escapeHtml(event.event_time)}</p><h1>${escapeHtml(event.title)}</h1><p class="event-host">Hosted by <a href="/@${encodeURIComponent(event.creator_username)}">@${escapeHtml(event.creator_username)}</a></p><dl class="event-details"><div><dt>Location</dt><dd>${escapeHtml(event.location)}</dd></div><div><dt>Who can apply</dt><dd>${escapeHtml(event.eligibility)}</dd></div><div><dt>Attendance</dt><dd>${event.attendee_count}${event.capacity ? ` / ${event.capacity}` : " attendees"}<small>${remaining === null ? "Unlimited capacity" : remaining ? `${remaining} spot${remaining === 1 ? "" : "s"} left` : "No spots left"}</small></dd></div></dl><div class="post-body">${renderMarkdown(event.description)}</div><section class="event-attendees"><div><p class="eyebrow">Community</p><h2>Attendees (${event.attendee_count})</h2></div>${attendeesHtml}</section><div class="profile-actions">${action}${deletion}</div></article>`;
+  return layout({ title: `${event.title} — mini-press`, body, user, csrfToken, activeTab: "events" });
+}
+
+export function renderAdminContent({ user, csrfToken, posts, boards, categories, events }) {
+  const deleteForm = (kind, id, label) => `<form method="post" action="/account/admin/${kind}/${id}/delete"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><button class="text-danger" onclick="return confirm('Delete this ${label}?')">Delete</button></form>`;
+  const list = (items, kind, label) => items.map((item) => `<li><span>${escapeHtml(item.title || item.name || item.slug)}${item.author_username ? ` <small>by @${escapeHtml(item.author_username)}</small>` : ""}</span>${deleteForm(kind, item.id, label)}</li>`).join("") || `<li class="empty">None yet.</li>`;
+  const body = `<section class="account-hero admin-hero"><div><p class="eyebrow">Administrator</p><h1>Content control</h1><p>Manage site-wide posts, boards, categories, and events.</p></div><a class="button secondary-button" href="/account">Back to account</a></section><section class="admin-content-grid"><div class="account-panel admin-create-category"><div class="account-panel-heading"><h2>Create category</h2></div><form method="post" action="/account/admin/categories"><input type="hidden" name="csrf" value="${escapeHtml(csrfToken)}"><label>Name<input name="name" maxlength="60" required></label><label>Description<textarea name="description" maxlength="300" rows="3"></textarea></label><button>Add category</button></form></div><div class="account-panel"><div class="account-panel-heading"><h2>Categories</h2><span>${categories.length}</span></div><ul class="admin-content-list">${list(categories, "categories", "category")}</ul></div><div class="account-panel"><div class="account-panel-heading"><h2>Boards</h2><span>${boards.length}</span></div><ul class="admin-content-list">${list(boards, "boards", "board")}</ul></div><div class="account-panel"><div class="account-panel-heading"><h2>Events</h2><span>${events.length}</span></div><ul class="admin-content-list">${list(events, "events", "event")}</ul></div><div class="account-panel"><div class="account-panel-heading"><h2>Posts</h2><span>${posts.length}</span></div><ul class="admin-content-list">${list(posts, "posts", "post")}</ul></div></section>`;
+  return layout({ title: "Manage content — mini-press", body, head: ACCOUNT_HEAD, user, csrfToken, activeTab: "account" });
 }
 
 export function renderAdminUsers(users, user, csrfToken) {
