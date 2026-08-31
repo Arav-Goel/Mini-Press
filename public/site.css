@@ -6,7 +6,10 @@
   --line: #e4e0d8;
   --surface: #ffffff;
   --soft: #f2efe9;
-  font-family: ui-serif, Georgia, "Times New Roman", serif;
+  --font-body: ui-serif, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --font-display: "Avenir Next", "Segoe UI Variable", "Segoe UI", ui-sans-serif, sans-serif;
+  --font-ui: "Segoe UI Variable", "Avenir Next", "Segoe UI", ui-sans-serif, sans-serif;
+  font-family: var(--font-body);
 }
 html[data-theme="dark"] {
   --ink: #eee9df;
@@ -334,8 +337,8 @@ body {
   padding: 1.25rem 2rem;
   border-bottom: 1px solid var(--line);
 }
-.brand { font-weight: bold; font-size: 1.3rem; color: var(--ink); text-decoration: none; }
-h1, h2, h3 { font-family: "Avenir Next", "Segoe UI", ui-sans-serif, sans-serif; letter-spacing: -0.025em; line-height: 1.12; }
+.brand { font-family: var(--font-ui); font-weight: 750; font-size: 1.3rem; color: var(--ink); text-decoration: none; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 720; letter-spacing: -0.032em; line-height: 1.08; }
 .site-tabs { display: flex; width: 100%; min-width: 0; align-items: center; gap: 0.3rem; flex-wrap: wrap; justify-content: space-between; }
 .site-tab { color: var(--muted); text-decoration: none; font-family: ui-monospace, monospace; padding: 0.4rem 0.55rem; border-bottom: 2px solid transparent; }
 .site-tab:hover, .site-tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
@@ -368,6 +371,54 @@ h1, h2, h3 { font-family: "Avenir Next", "Segoe UI", ui-sans-serif, sans-serif; 
 .secondary-button { border-color: var(--accent); background: transparent; color: var(--accent); }
 main { max-width: 720px; margin: 0 auto; padding: 2rem; }
 .site-footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 2rem; }
+
+.site-loader {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  width: 100vw;
+  height: 100vh;
+  place-items: center;
+  background: var(--paper);
+  color: var(--ink);
+  transition: opacity 380ms ease, visibility 380ms ease;
+}
+.site-loader-mark { display: grid; justify-items: center; gap: 1rem; }
+.site-loader-name {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 11vw, 6.75rem);
+  font-weight: 750;
+  letter-spacing: -0.065em;
+  line-height: 0.9;
+  text-transform: uppercase;
+  animation: minipress-loader-arrive 480ms cubic-bezier(.2, .8, .2, 1) both;
+}
+.site-loader-line {
+  position: relative;
+  display: block;
+  width: min(11rem, 48vw);
+  height: 2px;
+  overflow: hidden;
+  background: var(--line);
+}
+.site-loader-line::after {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  content: "";
+  transform: translateX(-100%);
+  animation: minipress-loader-progress 850ms ease-in-out infinite;
+}
+.site-loader.is-ready { visibility: hidden; pointer-events: none; opacity: 0; }
+@keyframes minipress-loader-arrive {
+  from { opacity: 0; transform: translateY(0.45rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes minipress-loader-progress {
+  0% { transform: translateX(-100%); }
+  55%, 100% { transform: translateX(100%); }
+}
 
 .feed-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
 .feed-summary, .post-meta { color: var(--muted); font-size: 0.85rem; }
@@ -550,6 +601,10 @@ button:hover { opacity: 0.9; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .site-loader { transition-duration: 120ms; }
+  .site-loader-name,
+  .site-loader-line::after { animation: none; }
+  .site-loader-line::after { transform: translateX(0); }
   html[data-theme="environment"] *,
   html[data-theme="environment"] *::before,
   html[data-theme="environment"] *::after,

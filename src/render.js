@@ -22,6 +22,13 @@ function layout({ title, body, head = "", user = null, csrfToken = null, activeT
   ${head}
 </head>
 <body>
+  <div class="site-loader" data-site-loader role="status" aria-live="polite" aria-label="Loading Mini-Press">
+    <div class="site-loader-mark">
+      <span class="site-loader-name">mini-press</span>
+      <span class="site-loader-line" aria-hidden="true"></span>
+      <span class="sr-only">Loading Mini-Press</span>
+    </div>
+  </div>
   <header class="site-header">
     <a class="brand" href="/">mini-press</a>
     <nav class="site-tabs" aria-label="Primary navigation">
@@ -42,6 +49,7 @@ function layout({ title, body, head = "", user = null, csrfToken = null, activeT
   <main>${body}</main>
   <footer class="site-footer">Built zero-dependency for the Zero Dependency Hackathon by Arav Goel and Moksh Kardam.</footer>
   <script src="/theme.js"></script>
+  <script src="/loader.js"></script>
   <script src="/social.js"></script>
 </body>
 </html>`;
