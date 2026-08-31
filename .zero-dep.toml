@@ -1,0 +1,3 @@
+track = "F"
+pitch = "A real social publishing platform using only Bun and JavaScript built-ins: SQLite, image processing, WebSockets, secure sessions, Markdown, RSS, and no installed packages."
+runtime = "Bun >= 1.4.0"
