@@ -29,8 +29,10 @@ make run
 ```
 
 Open <http://localhost:3000>, then create an account at
-<http://localhost:3000/signup>. On first launch, Mini-press creates its SQLite
-database, upload directory, and a local session-signing secret automatically.
+<http://localhost:3000/signup>. The repository includes a populated demo
+database so judges can explore it immediately. If `MINIPRESS_DATA_DIR` points
+to a new directory, Mini-press creates the SQLite database, upload directory,
+and local session-signing secret automatically.
 
 Useful commands:
 
@@ -111,6 +113,15 @@ tests/            built-in Bun tests for auth, ownership, Markdown, RSS, routes
 data/             versioned demo database and uploads; local session secret ignored
 ```
 
+### Demo data and local state
+
+The checked-in `data/minipress.sqlite`, WAL files, and image variants are
+deliberate demo assets, not a hosted service or a package dependency. They only
+contain hackathon demonstration content. `data/.session-secret` is intentionally
+ignored: each installation generates its own secret, so a clone never inherits
+the signing key for another deployment. To start with an empty site, point
+`MINIPRESS_DATA_DIR` at a new directory.
+
 ## Security and correctness choices
 
 - SQL uses prepared statements throughout; no user value is concatenated into
@@ -162,7 +173,8 @@ but large uploads still deserve queuing or a worker in a production service.
 There is no lockfile and no `node_modules` directory in the shipped project.
 The repository includes a demo SQLite dataset and images so judges can explore
 the product immediately. `data/.session-secret` is excluded because it is
-generated per installation and signing material must not be public. Run `make proof` immediately before submission to refresh
+generated per installation and signing material must not be public. Run
+`make proof` immediately before submission to refresh
 [deps-proof.txt](deps-proof.txt) from the manifest and local checkout.
 
 ## Demo path (five minutes)

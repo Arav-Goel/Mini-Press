@@ -173,6 +173,8 @@ html[data-theme="environment"] button:hover,
 html[data-theme="environment"] .button:hover { opacity: 1; transform: translateY(-2px); }
 html[data-theme="environment"] .secondary-button,
 html[data-theme="environment"] .social-action { border-radius: 0; }
+html[data-theme="environment"] .site-search button,
+html[data-theme="environment"] .board-search button { border-radius: 999px; }
 html[data-theme="environment"] :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 html[data-theme="ocean"] {
   --ink: #f2f8fb;
@@ -255,7 +257,7 @@ html[data-theme="ocean"] .feed-heading { margin: 3rem 0 1rem; }
 html[data-theme="ocean"] .feed-heading h1 { font-size: clamp(2rem, 4vw, 4rem); letter-spacing: -0.055em; }
 html[data-theme="ocean"] .post-list--feature-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
 }
 html[data-theme="ocean"] .post-list--feature-grid .post-card {
@@ -543,10 +545,6 @@ button:hover { opacity: 0.9; }
   html[data-theme="ocean"] .post-list--feature-grid { grid-template-columns: 1fr; }
   html[data-theme="ocean"] .post-list--feature-grid .post-card:first-child { grid-column: auto; grid-template-columns: 1fr; min-height: auto; }
   html[data-theme="ocean"] .post-list--feature-grid .post-card:first-child .post-thumb { min-height: 18rem; height: 18rem; }
-}
-
-@media (min-width: 701px) and (max-width: 1000px) {
-  html[data-theme="ocean"] .post-list--feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {

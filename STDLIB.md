@@ -10,6 +10,7 @@ Bun and JavaScript platform APIs.
 | Express, Fastify, Hono | `Bun.serve()` | `src/server.js` | Bun handles HTTP and WebSockets natively. We own route composition, error policy, and operational limits instead of inheriting a framework. |
 | `path-to-regexp`, `itty-router` | `URLPattern` + 39-line router | `src/router.js` | Web-standard matching and named parameters, with no route middleware abstraction. |
 | `better-sqlite3`, Prisma, an ORM | `bun:sqlite` + prepared SQL | `src/db.js` | Bun's built-in embedded database gives real persistence and transactions. Queries are explicit and synchronous rather than ORM-generated. |
+| Supabase, Firebase, hosted Postgres, a separate database container | committed demo SQLite + per-installation local SQLite | `data/`, `src/db.js` | The app needs no cloud account, network database, or sidecar process to run. The versioned database is sanitized demonstration data; a new `MINIPRESS_DATA_DIR` creates an independent local store. |
 | `bcrypt`, `argon2` | `node:crypto` `scryptSync` | `src/auth.js` | scrypt is memory-hard and standard-library available. Argon2 would be stronger in some deployments but would violate the empty-manifest rule here. |
 | Passport, `express-session`, Redis session store | signed HMAC cookie | `src/auth.js` | Stateless seven-day session cookie avoids a session table/service. It cannot be centrally revoked without rotating the local signing secret. |
 | `jsonwebtoken` | `createHmac("sha256")` + base64url payload | `src/auth.js` | There is no algorithm field or external JWT parser; only this app's HMAC format is accepted. The format is intentionally narrow. |
@@ -41,6 +42,10 @@ Bun and JavaScript platform APIs.
 - `node:crypto`, `node:fs`, `node:os`, and `node:path` are standard runtime
   modules. They supply password/session primitives, filesystem handling, and
   isolated test data directories.
+- The committed demo database and WebP assets are application content, not
+  vendored library source or a runtime service. The only secret,
+  `data/.session-secret`, is ignored and generated separately for every
+  installation.
 
 ## Deliberate gaps
 
