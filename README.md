@@ -1,26 +1,29 @@
-# mini-press
+# Mini-press
 
-**A social publishing platform built entirely with Bun built-ins.**
+> A full social publishing platform built with Bun and platform APIs—zero
+> installed dependencies.
 
-Mini-press lets people create accounts, publish Markdown posts, gather in
-boards, follow and vote for one another, RSVP to events, and read an RSS
-feed. It uses a real SQLite database, server-side image processing, signed
-sessions, WebSockets, and no installed packages.
+Mini-press is a real community product, not a minimal proof-of-concept. People
+can create accounts, publish Markdown writing, join boards, follow and vote on
+profiles, RSVP to events, and subscribe through RSS. It includes persistent
+SQLite data, image processing, signed sessions, CSRF protection, and live
+WebSocket previews—all without `npm install`.
 
 > **Zero Dependency Hackathon — Track F (Open/Wildcard)**
 >
-> The point is not an empty app with an empty manifest. This is a working
-> community product that normally reaches for a web framework, ORM, auth
-> library, Markdown renderer, image package, RSS package, and database driver.
-> Here, each of those is either a Bun/JavaScript built-in or small code written
-> in this repository. See [STDLIB.md](STDLIB.md) for the receipts.
+> **Bonus claim: 20+ library replacements.** A typical version of this product
+> would install a framework, router, ORM, auth/session packages, Markdown and
+> image tooling, a WebSocket library, an RSS generator, and a test runner.
+> Mini-press replaces 20+ such categories with Bun/JavaScript built-ins or
+> compact, project-owned code. See [STDLIB.md](STDLIB.md) for the audited
+> dependency ledger.
 
 ## Run it
 
-### Requirements
+### Prerequisite
 
 - [Bun](https://bun.sh) **1.4.0 or newer**. Bun is the runtime, not a project
-  dependency; do **not** run `bun install`.
+  dependency, so do **not** run `bun install`.
 
 ### One command
 
@@ -28,11 +31,11 @@ sessions, WebSockets, and no installed packages.
 make run
 ```
 
-Open <http://localhost:3000>, then create an account at
-<http://localhost:3000/signup>. The repository includes a populated demo
-database so judges can explore it immediately. If `MINIPRESS_DATA_DIR` points
-to a new directory, Mini-press creates the SQLite database, upload directory,
-and local session-signing secret automatically.
+Open <http://localhost:3000>. A populated, sanitized demo database is included
+for immediate exploration; create another account at
+<http://localhost:3000/signup> to test the full writing flow. Pointing
+`MINIPRESS_DATA_DIR` to a new directory creates an independent SQLite
+database, upload directory, and local session-signing secret automatically.
 
 Useful commands:
 
@@ -81,6 +84,18 @@ For example: `PORT=8787 SITE_URL=https://press.example.com make run`.
   environmental editorial theme, and a dark marine Ocean theme are available
   from the persistent theme toggle.
 - **RSS.** `/feed.xml` provides a standards-friendly feed of published posts.
+
+## Judge quick-start
+
+```bash
+make proof  # verifies the empty dependency maps and absence of install artifacts
+make test   # runs the built-in test suite
+make run    # starts the complete application
+```
+
+Then open the app, create a second account, and use the demo flow below. No
+package installation, API key, hosted database, or background service is
+required.
 
 ## Architecture at a glance
 
@@ -175,14 +190,17 @@ but large uploads still deserve queuing or a worker in a production service.
 There is no lockfile and no `node_modules` directory in the shipped project.
 The repository includes a demo SQLite dataset and images so judges can explore
 the product immediately. `data/.session-secret` is excluded because it is
-generated per installation and signing material must not be public. Run
-`make proof` immediately before submission to refresh
-[deps-proof.txt](deps-proof.txt) from the manifest and local checkout.
+generated per installation and signing material must not be public.
 
-## Demo path (five minutes)
+Run `make proof` immediately before submission to regenerate
+[deps-proof.txt](deps-proof.txt) from the real manifest and checkout. The full
+replacement inventory—and the 20+ replacement bonus claim—is documented in
+[STDLIB.md](STDLIB.md).
 
-1. Show `package.json`, `deps-proof.txt`, and [STDLIB.md](STDLIB.md).
-2. Run `make test`, then `make run`.
+## Suggested five-minute demo
+
+1. Show `package.json`, `deps-proof.txt`, and [STDLIB.md](STDLIB.md), then run
+   `make test` and `make run`.
 3. Sign up, create a Markdown draft, watch live preview, add a cover image,
    choose a category/board, and publish it.
 4. In a second account, follow the author, vote, like, and comment; show the
