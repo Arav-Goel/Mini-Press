@@ -1,0 +1,13 @@
+# The demo database and uploads are intentionally versioned for the hackathon.
+# This secret is generated per installation and must never be published.
+data/.session-secret
+
+# Bun / JavaScript install artifacts (the project deliberately has none).
+node_modules/
+bun.lock
+bun.lockb
+
+# Local editor and OS files.
+.DS_Store
+.env
+.env.*

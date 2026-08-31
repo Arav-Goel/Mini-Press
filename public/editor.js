@@ -8,7 +8,7 @@ const output = document.getElementById("preview-output");
 
 if (textarea && output) {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  const socket = new WebSocket(`${proto}//${location.host}/admin/preview-ws`);
+  const socket = new WebSocket(`${proto}//${location.host}/account/preview-ws`);
 
   let debounceTimer = null;
   function sendPreview() {

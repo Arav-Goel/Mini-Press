@@ -1,168 +1,180 @@
 # mini-press
 
-A tiny WordPress. Login, write posts in Markdown, upload a cover photo that
-gets auto-resized, publish, readers comment, everyone gets an RSS feed, and
-the editor shows a live preview as you type — all on **one runtime, zero
-installed packages**.
+**A social publishing platform built entirely with Bun built-ins.**
 
-Track F (Open/Wildcard). Built on **Bun** (bun.sh), because Bun 1.4 ships
-enough built-in machinery — SQLite, image resizing, a web server, WebSockets —
-to make this realistic without a single `bun install`.
+Mini-press lets people create accounts, publish Markdown posts, gather in
+boards, follow and vote for one another, RSVP to events, and read an RSS
+feed. It uses a real SQLite database, server-side image processing, signed
+sessions, WebSockets, and no installed packages.
+
+> **Zero Dependency Hackathon — Track F (Open/Wildcard)**
+>
+> The point is not an empty app with an empty manifest. This is a working
+> community product that normally reaches for a web framework, ORM, auth
+> library, Markdown renderer, image package, RSS package, and database driver.
+> Here, each of those is either a Bun/JavaScript built-in or small code written
+> in this repository. See [STDLIB.md](STDLIB.md) for the receipts.
 
 ## Run it
 
-You need **Bun >= 1.4.0**. Install it once from https://bun.sh (that's the
-*runtime*, not a dependency of the project — same category as installing
-Node or Python itself).
+### Requirements
+
+- [Bun](https://bun.sh) **1.4.0 or newer**. Bun is the runtime, not a project
+  dependency; do **not** run `bun install`.
+
+### One command
 
 ```bash
-# 1. create your admin login (one time)
-bun src/scripts/create-admin.js yourname yourpassword
-
-# 2. start the server
 make run
-# or: bun src/server.js
-
-# 3. open it
-# public site:  http://localhost:3000
-# admin login:  http://localhost:3000/admin/login
 ```
 
-Run the tests: `make test` (or `bun test`).
+Open <http://localhost:3000>, then create an account at
+<http://localhost:3000/signup>. On first launch, Mini-press creates its SQLite
+database, upload directory, and a local session-signing secret automatically.
 
-## What it actually does
+Useful commands:
 
-- **Log in** — one admin account, password hashed with `scrypt`, session is
-  a signed cookie (no session database table needed).
-- **Write a post** — Markdown in a textarea, rendered live in a side panel
-  as you type, via a WebSocket round-trip to the server.
-- **Upload a cover photo** — dropped into the post form, resized server-side
-  into thumbnail / medium / large `.webp` variants.
-- **Publish** — flips a post from draft to live on the public site.
-- **Readers comment** — no login required, just a name and a message.
-- **RSS feed** — `/feed.xml`, works in any real feed reader.
-- **Persistence** — everything lives in a real SQLite file (`data/minipress.sqlite`),
-  survives restarts.
+```bash
+make test      # run the built-in Bun test suite
+make proof     # regenerate the zero-dependency proof
+make dev       # restart automatically while editing source
+```
 
-## What it deliberately doesn't do (be honest about limits)
+Configuration is optional:
 
-- **One admin account.** No multi-user roles, no signup flow. This is a
-  personal blog engine, not a multi-tenant CMS.
-- **No comment moderation queue.** Comments post immediately, no spam
-  filter, no approve/reject UI. If you ship this for real, add a
-  `comments.approved` flag and gate the public view on it — the column
-  layout in `src/db.js` was left easy to extend that way.
-- **No password reset / email at all.** There is no email sending anywhere
-  in this project (nothing in any language's standard library sends email
-  without a package — see STDLIB.md). Forgot your password: reset it
-  directly in the SQLite file, or add a new admin with the CLI script.
-- **No rate limiting on login.** A determined attacker can brute-force the
-  admin password with unlimited attempts. Fine for a hackathon demo behind
-  a strong password; not fine for a real deployment — add a login attempt
-  counter before you'd trust this with real user data.
-- **http, not https, out of the box.** `Bun.serve()` here isn't wired to
-  TLS. Put it behind a reverse proxy (Caddy, nginx) for real deployment, or
-  see Bun's docs for passing TLS options directly to `Bun.serve`.
-- **Markdown is a hand-rolled subset**, not full CommonMark. No tables, no
-  nested lists, no footnotes. It covers what most blog posts actually need
-  (headers, bold/italic, links, images, code blocks, quotes, lists) and
-  every user-supplied character is HTML-escaped before it touches the page
-  — that escaping is deliberately non-negotiable, see `src/markdown.js`.
+| Variable | Default | Use |
+| --- | --- | --- |
+| `PORT` | `3000` | HTTP listen port |
+| `SITE_URL` | `http://localhost:$PORT` | Canonical URL used in RSS links |
+| `MINIPRESS_DATA_DIR` | `./data` | Database, upload, and session-secret directory |
 
-## Concurrency model (Track C-style honesty, applied here too)
+For example: `PORT=8787 SITE_URL=https://press.example.com make run`.
 
-Bun's request handler runs on one JS thread per process, same event-loop
-model as Node: I/O (database reads, file reads, network) doesn't block
-other in-flight requests, but CPU-bound work briefly does. The place that
-matters here is **image encoding** during upload — resizing a large photo
-will pause other requests for the duration of that encode. For a
-single-author blog this is a non-issue; if you wanted this to serve real
-concurrent traffic during uploads, the fix is moving image processing to a
-Worker (Bun supports `Worker` natively) so it doesn't share the main
-thread's event loop.
+## What is included
 
-## Durability (Track D-style honesty, applied here too)
+- **Accounts and ownership.** Anyone can sign up and log in. Posts, comments,
+  likes, follows, votes, board membership, and event attendance are tied to an
+  authenticated account—not an editable display-name field.
+- **Writing workflow.** Authors create drafts, edit or delete only their own
+  posts, select a category and board, upload a cover image, and publish. The
+  editor sends Markdown over a WebSocket for a live server-rendered preview.
+- **Discovery.** The home feed has post search and five-post pagination.
+  Posts show a cover thumbnail, author, category/board, reading-time estimate,
+  likes, and share controls.
+- **Community.** Public profiles show reputation and totals. Follow/following
+  lists are opened deliberately by clicking their counts; member cards link
+  back to public profiles. Following feed, up/down votes, and contributor
+  badges make activity visible.
+- **Boards and categories.** Users can create, join, and search boards by
+  name or description. Posts can be grouped under the nine seeded categories:
+  Question?, Discussion, Reflection, Guide, Showcase, Review, Hot Take,
+  Announcements, and Others.
+- **Events.** Signed-in users can host dated events with a location,
+  eligibility, optional capacity, and image. RSVPs are capacity-safe,
+  attendee lists are public, and creators can delete their own events.
+- **Administration.** The account named `adminjs` is promoted to site admin.
+  It can manage users, posts, boards, categories, and events. This is an
+  explicit role, not a hidden first-user rule.
+- **Three visual themes.** Light, dark, and a purple futuristic grid theme are
+  available from the persistent theme toggle.
+- **RSS.** `/feed.xml` provides a standards-friendly feed of published posts.
 
-SQLite is opened in **WAL mode** (`PRAGMA journal_mode = WAL`). That means:
-writes are appended to a `-wal` file and only periodically checkpointed
-into the main database file, so a crash mid-write doesn't corrupt existing
-data — SQLite replays the WAL on next open. Uploaded images are written with
-`Bun.write()`, which is not explicitly `fsync`'d in this codebase; on a real
-crash (not just a process restart) a very recently uploaded image variant
-could theoretically be lost even though the database row referencing it
-survived. Documented, not hidden.
+## Architecture at a glance
 
-## Security notes (threat model)
-
-**What this defends against:**
-- **SQL injection** — every query in `src/db.js` uses parameterized
-  statements (`?` placeholders), never string concatenation.
-- **XSS** — every piece of user-supplied text (post titles, markdown
-  content, comment author/body) is HTML-escaped before rendering. The
-  markdown renderer escapes first, then applies formatting — raw HTML in a
-  post body or comment can never execute as HTML.
-- **Password cracking if the DB leaks** — passwords are hashed with
-  `scrypt` (memory-hard, deliberately slow), never stored in plaintext or
-  behind a fast hash like bare SHA-256.
-- **Cookie forgery/tampering** — session cookies are HMAC-SHA256 signed
-  with a server-only secret generated on first run
-  (`data/.session-secret`, `chmod 600`). A forged or edited cookie fails
-  signature verification and is treated as logged-out.
-- **CSRF** on state-changing admin actions — a token derived from the
-  session (via HMAC) is embedded in every form and re-verified on submit.
-- **Path traversal** on the `/uploads/:filename` route — filenames
-  containing `..` or `/` are rejected before touching the filesystem.
-- **Timing attacks** on all secret comparisons (password hash, session
-  signature, CSRF token) — `crypto.timingSafeEqual` throughout, never `===`
-  on secret material.
-
-**What this does NOT defend against** (documented, not silently absent):
-- Login brute-forcing (no rate limit — see above).
-- XSS via a compromised session secret file or server-level access.
-- Anything requiring HTTPS in transit — that's the deploy environment's job.
-- Large-file DoS on image upload — there's no upload size cap in this MVP.
-  Add one (check `Content-Length` / stream size before decoding) before
-  exposing this publicly.
+| Concern | Implementation |
+| --- | --- |
+| Server and WebSockets | `Bun.serve()` in `src/server.js` |
+| Routes | a small `URLPattern` router in `src/router.js` |
+| Persistence | `bun:sqlite` with WAL mode in `src/db.js` |
+| Passwords and sessions | `node:crypto` scrypt + HMAC-signed HTTP-only cookies |
+| CSRF | HMAC token derived from the authenticated session |
+| HTML | template literals with explicit escaping in `src/render.js` |
+| Markdown | hand-written, XSS-safe subset renderer in `src/markdown.js` |
+| Images | `Bun.Image` resize → WebP pipeline in `src/images.js` |
+| Tests | Bun's built-in `bun:test` runner |
 
 ## Project layout
 
-```
-mini-press/
-  src/
-    server.js      entry point: routes + auth checks + wiring
-    router.js       tiny URLPattern-based router (~40 lines)
-    db.js            bun:sqlite schema + queries
-    auth.js           password hashing, signed sessions, CSRF
-    markdown.js        hand-rolled markdown -> HTML renderer
-    images.js           Bun.Image resize pipeline
-    rss.js               hand-rolled RSS 2.0 XML
-    render.js             HTML page templates (template literals)
-    scripts/create-admin.js
-  public/
-    site.css, admin.css, editor.js (live preview client)
-  tests/            bun:test suites for markdown, auth, rss, router
-  data/             created at runtime: sqlite db + uploaded images (gitignored)
-  README.md, STDLIB.md, CLAUDE.md, Makefile, package.json, deps-proof.txt
+```text
+src/
+  server.js       routes, auth checks, static files, and WebSocket preview
+  db.js           SQLite schema, migrations, prepared queries, transactions
+  auth.js         scrypt passwords, signed sessions, CSRF validation
+  render.js       escaped HTML template literals
+  markdown.js     hand-written Markdown subset and safe HTML escaping
+  images.js       Bun.Image smoke test and WebP variants
+  rss.js          RSS 2.0 XML generation
+  router.js       minimal URLPattern route dispatcher
+public/           CSS plus browser-side editor/theme/social enhancements
+tests/            built-in Bun tests for auth, ownership, Markdown, RSS, routes
+data/             versioned demo database and uploads; local session secret ignored
 ```
 
-## The image API — now verified against real Bun docs, not guessed
+## Security and correctness choices
 
-`src/images.js` was originally written blind (no Bun runtime in the dev
-sandbox) and shipped with a wrong guess at the `Bun.Image` call shape —
-it failed on first run with `Bun.Image.decode is not a function`. That's
-been fixed and re-verified against the official docs at
-https://bun.com/docs/runtime/image and https://bun.com/blog/bun-v1.3.14.
-The real API is a chainable pipeline from a constructor:
+- SQL uses prepared statements throughout; no user value is concatenated into
+  a query.
+- Passwords use a fresh random salt and `scryptSync`; comparisons use
+  `timingSafeEqual`.
+- Sessions are HMAC-SHA256 signed, seven-day, `HttpOnly`, and `SameSite=Lax`.
+  State-changing forms are CSRF checked.
+- User content is escaped before Markdown formatting. Raw HTML never executes.
+- Upload names are generated by the server, and the upload route rejects path
+  traversal patterns.
+- Event capacity is enforced in a SQLite transaction, not merely in the UI.
+- SQLite runs in WAL mode. A crash can lose a just-written image variant
+  because image writes are not explicitly `fsync`ed, but the database remains
+  recoverable through normal WAL replay.
 
-```js
-await new Bun.Image(buffer)
-  .resize(width, undefined, { fit: "inside", withoutEnlargement: true })
-  .webp({ quality: 82 })
-  .write(path);
+## Honest limits
+
+Mini-press is ready for a hackathon demo and local use, not a hardened public
+hosting service. Before internet-facing deployment, add:
+
+- HTTPS and a `Secure` session-cookie flag (use a reverse proxy or Bun TLS);
+- rate limiting and abuse/moderation tools for authentication, comments, and
+  uploads;
+- upload size/type limits and asynchronous image work for large files;
+- password reset/email verification and account recovery;
+- a fuller CommonMark implementation if your audience needs tables, nested
+  lists, footnotes, or other unsupported syntax;
+- a multi-process deployment strategy. SQLite WAL works well for this one
+  process, but it is not a distributed database.
+
+## Concurrency model
+
+`Bun.serve()` handles requests asynchronously on one JavaScript event loop.
+Network/file waiting does not block unrelated requests; synchronous SQLite
+queries and CPU work do. The `Bun.Image` pipeline is explicitly smoke-tested at
+boot and the image API performs its image work outside normal JS execution,
+but large uploads still deserve queuing or a worker in a production service.
+
+## Zero-dependency proof
+
+`package.json` deliberately contains:
+
+```json
+"dependencies": {},
+"devDependencies": {}
 ```
 
-`verifyImageSupport()` still runs a real 1x1-PNG round-trip through that
-exact chain at server boot, so if Bun's API moves again in some future
-version, you get a clear error at startup instead of a silent broken
-upload. If it ever throws, `pipeline()` and `resizeStep()` near the top of
-`src/images.js` are the two functions to check.
+There is no lockfile and no `node_modules` directory in the shipped project.
+The repository includes a demo SQLite dataset and images so judges can explore
+the product immediately. `data/.session-secret` is excluded because it is
+generated per installation and signing material must not be public. Run `make proof` immediately before submission to refresh
+[deps-proof.txt](deps-proof.txt) from the manifest and local checkout.
+
+## Demo path (five minutes)
+
+1. Show `package.json`, `deps-proof.txt`, and [STDLIB.md](STDLIB.md).
+2. Run `make test`, then `make run`.
+3. Sign up, create a Markdown draft, watch live preview, add a cover image,
+   choose a category/board, and publish it.
+4. In a second account, follow the author, vote, like, and comment; show the
+   following feed and profile list links.
+5. Create an event, RSVP from the other account, and show the attendee list.
+6. Sign in as `adminjs` and show user/content moderation.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
