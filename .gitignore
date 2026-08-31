@@ -1,4 +1,10 @@
 # The demo database and uploads are intentionally versioned for the hackathon.
+# SQLite's WAL and shared-memory sidecars are runtime state. Versioning them
+# can leave a running server holding stale filesystem handles after a Git
+# update, so only the checkpointed main database belongs in the repository.
+data/minipress.sqlite-wal
+data/minipress.sqlite-shm
+
 # This secret is generated per installation and must never be published.
 data/.session-secret
 

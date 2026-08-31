@@ -110,17 +110,19 @@ src/
   router.js       minimal URLPattern route dispatcher
 public/           CSS plus browser-side editor/theme/social enhancements
 tests/            built-in Bun tests for auth, ownership, Markdown, RSS, routes
-data/             versioned demo database and uploads; local session secret ignored
+data/             checkpointed demo database and uploads; local runtime state ignored
 ```
 
 ### Demo data and local state
 
-The checked-in `data/minipress.sqlite`, WAL files, and image variants are
-deliberate demo assets, not a hosted service or a package dependency. They only
-contain hackathon demonstration content. `data/.session-secret` is intentionally
-ignored: each installation generates its own secret, so a clone never inherits
-the signing key for another deployment. To start with an empty site, point
-`MINIPRESS_DATA_DIR` at a new directory.
+The checked-in `data/minipress.sqlite` and image variants are deliberate demo
+assets, not a hosted service or a package dependency. They only contain
+hackathon demonstration content. SQLite's `-wal` and `-shm` sidecars are
+runtime-only files and are intentionally ignored: committing or replacing them
+while Bun has the database open can cause macOS `SQLITE_IOERR_VNODE` errors.
+`data/.session-secret` is also ignored, so every installation gets its own
+signing key. To start with an empty site, point `MINIPRESS_DATA_DIR` at a new
+directory.
 
 ## Security and correctness choices
 
