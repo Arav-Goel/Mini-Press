@@ -10,7 +10,7 @@ function layout({ title, body, head = "", user = null, csrfToken = null, activeT
   const accountLink = user
     ? `<a class="site-tab ${activeTab === "account" ? "is-active" : ""}" href="/account">@${escapeHtml(user.username)}</a>`
     : `<a class="site-tab ${activeTab === "login" ? "is-active" : ""}" href="/login">Log in</a>
-       <a class="site-tab" href="/signup">Create account</a>`;
+       <a class="site-tab" href="/signup">Sign up</a>`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -92,7 +92,8 @@ export function renderHome({ posts, user = null, query = "", page = 1, totalPage
   const resultCount = query ? `<p class="feed-summary">${total} ${total === 1 ? "post" : "posts"} found</p>` : "";
   const oceanCta = user ? `<a class="button" href="/account/new">Write a story</a>` : `<a class="button" href="/signup">Join the conversation</a>`;
   const oceanHero = query ? "" : `<section class="ocean-hero"><p class="eyebrow">Mini-press presents</p><h1>Ocean stories</h1><p>Dive deeper. Think bigger. Explore our blue planet and the life that depends on it.</p>${oceanCta}</section>`;
-  return layout({ title: query ? `Search — mini-press` : "mini-press", body: `${oceanHero}<section class="feed-heading"><h1>${heading}</h1>${resultCount}</section><div class="post-list">${items}</div>${pagination}`, user, activeTab: "home", query });
+  const homeListClass = query ? "post-list" : "post-list post-list--feature-grid";
+  return layout({ title: query ? `Search — mini-press` : "mini-press", body: `${oceanHero}<section class="feed-heading"><h1>${heading}</h1>${resultCount}</section><div class="${homeListClass}">${items}</div>${pagination}`, user, activeTab: "home", query });
 }
 
 export function renderPost(post, comments, user = null, csrfToken = null) {
