@@ -72,6 +72,7 @@ function renderPostCards(posts) {
         <p class="post-excerpt">${escapeHtml(excerpt(post.markdown))}</p>
         <p class="post-meta"><a href="/@${encodeURIComponent(post.author_username || "unknown")}">By @${escapeHtml(post.author_username || "unknown")}</a><span aria-hidden="true">·</span><time datetime="${post.created_at}">${escapeHtml(post.created_at)}</time><span aria-hidden="true">·</span>${readingTime(post.markdown)} min read<span aria-hidden="true">·</span>♥ ${post.like_count || 0}</p>
         ${post.category_name ? `<p class="post-tags"><a href="/categories/${encodeURIComponent(post.category_slug)}">${escapeHtml(post.category_name)}</a>${post.board_name ? ` <a href="/boards/${encodeURIComponent(post.board_slug)}">b/${escapeHtml(post.board_name)}</a>` : ""}</p>` : ""}
+        <a class="post-read-more" href="/post/${encodeURIComponent(post.slug)}">Read more <span aria-hidden="true">→</span></a>
       </div>
     </article>`;
   }).join("");
@@ -89,7 +90,9 @@ export function renderHome({ posts, user = null, query = "", page = 1, totalPage
     </nav>` : "";
 
   const resultCount = query ? `<p class="feed-summary">${total} ${total === 1 ? "post" : "posts"} found</p>` : "";
-  return layout({ title: query ? `Search — mini-press` : "mini-press", body: `<section class="feed-heading"><h1>${heading}</h1>${resultCount}</section><div class="post-list">${items}</div>${pagination}`, user, activeTab: "home", query });
+  const oceanCta = user ? `<a class="button" href="/account/new">Write a story</a>` : `<a class="button" href="/signup">Join the conversation</a>`;
+  const oceanHero = query ? "" : `<section class="ocean-hero"><p class="eyebrow">Mini-press presents</p><h1>Ocean stories</h1><p>Dive deeper. Think bigger. Explore our blue planet and the life that depends on it.</p>${oceanCta}</section>`;
+  return layout({ title: query ? `Search — mini-press` : "mini-press", body: `${oceanHero}<section class="feed-heading"><h1>${heading}</h1>${resultCount}</section><div class="post-list">${items}</div>${pagination}`, user, activeTab: "home", query });
 }
 
 export function renderPost(post, comments, user = null, csrfToken = null) {

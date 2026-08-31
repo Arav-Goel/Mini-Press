@@ -5,9 +5,15 @@
   function apply(theme) {
     root.dataset.theme = theme;
     if (toggle) {
-      const next = theme === "light" ? "dark" : theme === "dark" ? "future" : "light";
-      const labels = { light: "Switch to dark mode", dark: "Switch to futuristic mode", future: "Switch to light mode" };
-      const icons = { light: "◐", dark: "✦", future: "☀" };
+      const next = theme === "light" ? "dark" : theme === "dark" ? "future" : theme === "future" ? "environment" : theme === "environment" ? "ocean" : "light";
+      const labels = {
+        light: "Switch to dark mode",
+        dark: "Switch to futuristic mode",
+        future: "Switch to environment mode",
+        environment: "Switch to ocean mode",
+        ocean: "Switch to light mode"
+      };
+      const icons = { light: "◐", dark: "✦", future: "☀", environment: "♧", ocean: "≋" };
       toggle.setAttribute("aria-label", labels[theme]);
       toggle.setAttribute("title", labels[theme]);
       toggle.firstElementChild.textContent = icons[theme];

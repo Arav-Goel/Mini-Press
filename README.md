@@ -75,8 +75,9 @@ For example: `PORT=8787 SITE_URL=https://press.example.com make run`.
 - **Administration.** The account named `adminjs` is promoted to site admin.
   It can manage users, posts, boards, categories, and events. This is an
   explicit role, not a hidden first-user rule.
-- **Three visual themes.** Light, dark, and a purple futuristic grid theme are
-  available from the persistent theme toggle.
+- **Five visual themes.** Light, dark, a purple futuristic grid theme, an
+  environmental editorial theme, and a dark marine Ocean theme are available
+  from the persistent theme toggle.
 - **RSS.** `/feed.xml` provides a standards-friendly feed of published posts.
 
 ## Architecture at a glance

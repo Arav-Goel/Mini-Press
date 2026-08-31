@@ -24,6 +24,7 @@ Bun and JavaScript platform APIs.
 | `slugify` | small local `slugify()` function | `src/server.js` | Enough for current ASCII titles. It needs a collision strategy and Unicode policy before large-scale use. |
 | Lodash / date helper for reading time | plain JS word count and `Math.ceil` | `src/render.js` | A transparent 200 words/minute estimate; it is approximate by design. |
 | Nodemon | `bun --watch` | `package.json`, `Makefile` | Bun provides the development restart loop itself. |
+| GSAP, Animate.css, motion library | scoped CSS transitions and `prefers-reduced-motion` | `public/site.css`, `public/account.css` | The Environment theme only uses short hover/focus transitions and transform feedback; CSS keeps them dependency-free and lets users who reduce motion opt out. |
 | Jest, Vitest, Mocha | `bun:test` | `tests/` | Built into Bun; no dev dependency or separate test runner is installed. |
 | `dotenv` | environment variables supplied by shell | `src/server.js`, README | `PORT`, `SITE_URL`, and `MINIPRESS_DATA_DIR` work without a config loader. |
 

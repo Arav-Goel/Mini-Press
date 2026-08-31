@@ -44,3 +44,26 @@ button.danger { background: #7a1f1f; }
   .editor-grid { grid-template-columns: 1fr; }
   main { max-width: 100%; }
 }
+
+html[data-theme="environment"] .account-hero,
+html[data-theme="environment"] .account-panel,
+html[data-theme="environment"] .preview-pane { border-radius: 0; }
+html[data-theme="environment"] .account-hero { border-left: 3px solid var(--accent); background: linear-gradient(120deg, var(--soft), var(--surface)); }
+html[data-theme="environment"] .account-panel,
+html[data-theme="environment"] .preview-pane { background: var(--surface); }
+html[data-theme="environment"] .editor-form input[type="text"],
+html[data-theme="environment"] .editor-form input:not([type="file"]),
+html[data-theme="environment"] .editor-form textarea { color: var(--ink); background: var(--surface); border-radius: 0; }
+html[data-theme="environment"] .cover-preview { border-radius: 0; box-shadow: 8px 8px 0 rgba(127, 202, 99, 0.16); }
+
+html[data-theme="ocean"] .account-hero { border: 1px solid var(--line); border-left: 3px solid var(--accent); background: linear-gradient(120deg, #0e2b43, var(--surface)); }
+html[data-theme="ocean"] .account-panel,
+html[data-theme="ocean"] .preview-pane { border-color: var(--line); background: var(--surface); }
+html[data-theme="ocean"] .account-panel-heading { border-bottom: 1px solid var(--line); }
+html[data-theme="ocean"] .post-table a,
+html[data-theme="ocean"] .post-actions a,
+html[data-theme="ocean"] .text-danger { color: var(--accent); }
+html[data-theme="ocean"] .editor-form input[type="text"],
+html[data-theme="ocean"] .editor-form input:not([type="file"]),
+html[data-theme="ocean"] .editor-form textarea { color: var(--ink); background: #071523; border-color: var(--line); }
+html[data-theme="ocean"] .cover-preview { border: 1px solid var(--line); box-shadow: 0 12px 26px rgba(0, 0, 0, 0.25); }
