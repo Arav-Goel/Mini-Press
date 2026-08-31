@@ -321,6 +321,7 @@ router.get("/site.css", async () => staticFile("./public/site.css"));
 router.get("/account.css", async () => staticFile("./public/account.css"));
 router.get("/editor.js", async () => staticFile("./public/editor.js"));
 router.get("/theme.js", async () => staticFile("./public/theme.js"));
+router.get("/loader.js", async () => staticFile("./public/loader.js"));
 router.get("/social.js", async () => staticFile("./public/social.js"));
 
 // ---------- accounts ----------
